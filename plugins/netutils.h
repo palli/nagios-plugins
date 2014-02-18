@@ -1,10 +1,10 @@
 /*****************************************************************************
 * 
-* Nagios plugins net utilities include file
+* Monitoring Plugins net utilities include file
 * 
 * License: GPL
 * Copyright (c) 1999 Ethan Galstad (nagios@nagios.org)
-* Copyright (c) 2003-2007 Nagios Plugins Development Team
+* Copyright (c) 2003-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -81,25 +81,21 @@ void host_or_die(const char *str);
 #  define is_hostname(addr) resolve_host_or_addr(addr, AF_INET)
 #endif
 
-#ifdef LOCAL_TIMEOUT_ALARM_HANDLER
 extern unsigned int socket_timeout;
-extern int socket_timeout_state;
-RETSIGTYPE socket_timeout_alarm_handler (int) __attribute__((noreturn));
-#else
-unsigned int socket_timeout = DEFAULT_SOCKET_TIMEOUT;
-unsigned int socket_timeout_state = STATE_CRITICAL;
-extern RETSIGTYPE socket_timeout_alarm_handler (int) __attribute__((noreturn));
-#endif
-
+extern unsigned int socket_timeout_state;
 extern int econn_refuse_state;
 extern int was_refused;
 extern int address_family;
+
+RETSIGTYPE socket_timeout_alarm_handler (int) __attribute__((noreturn));
 
 /* SSL-Related functionality */
 #ifdef HAVE_SSL
 /* maybe this could be merged with the above np_net_connect, via some flags */
 int np_net_ssl_init(int sd);
 int np_net_ssl_init_with_hostname(int sd, char *host_name);
+int np_net_ssl_init_with_hostname_and_version(int sd, char *host_name, int version);
+int np_net_ssl_init_with_hostname_version_and_cert(int sd, char *host_name, int version, char *cert, char *privkey);
 void np_net_ssl_cleanup();
 int np_net_ssl_write(const void *buf, int num);
 int np_net_ssl_read(void *buf, int num);

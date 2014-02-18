@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_icmp plugin
+* Monitoring check_icmp plugin
 * 
 * License: GPL
-* Copyright (c) 2005-2008 Nagios Plugins Development Team
+* Copyright (c) 2005-2008 Monitoring Plugins Development Team
 * Original Author : Andreas Ericsson <ae@op5.se>
 * 
 * Description:
@@ -40,9 +40,9 @@
 /* char *progname = "check_icmp"; */
 char *progname;
 const char *copyright = "2005-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
-/** nagios plugins basic includes */
+/** Monitoring Plugins basic includes */
 #include "common.h"
 #include "netutils.h"
 #include "utils.h"
@@ -454,6 +454,14 @@ main(int argc, char **argv)
 	/* Parse extra opts if any */
 	argv=np_extra_opts(&argc, argv, progname);
 
+	/* support "--help" and "--version" */
+	if(argc == 2) {
+		if(!strcmp(argv[1], "--help"))
+			strcpy(argv[1], "-h");
+		if(!strcmp(argv[1], "--version"))
+			strcpy(argv[1], "-V");
+	}
+
 	/* parse the arguments */
 	for(i = 1; i < argc; i++) {
 		while((arg = getopt(argc, argv, "vhVw:c:n:p:t:H:s:i:b:I:l:m:")) != EOF) {
@@ -472,7 +480,6 @@ main(int argc, char **argv)
 					usage_va("ICMP data length must be between: %d and %d",
 					         sizeof(struct icmp) + sizeof(struct icmp_ping_data),
 					         MAX_PING_DATA - 1);
-
 				break;
 			case 'i':
 				pkt_interval = get_timevar(optarg);
@@ -512,12 +519,12 @@ main(int argc, char **argv)
 			case 's': /* specify source IP address */
 				set_source_ip(optarg);
 				break;
-      case 'V':                 /* version */
-        print_revision (progname, NP_VERSION);
-        exit (STATE_OK);
-      case 'h':                 /* help */
-        print_help ();
-        exit (STATE_OK);
+			case 'V': /* version */
+				print_revision (progname, NP_VERSION);
+				exit (STATE_OK);
+			case 'h': /* help */
+				print_help ();
+				exit (STATE_OK);
 			}
 		}
 	}

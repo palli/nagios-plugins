@@ -6,6 +6,7 @@ NP-VERSION-FILE
 /aclocal.m4
 /autom4te*.cache
 /Cache.pm
+/ChangeLog
 /command.cfg
 /compile
 /confdefs.h
@@ -20,7 +21,7 @@ NP-VERSION-FILE
 /Makefile
 /Makefile.in
 /missing
-/nagios-plugins.spec
+/monitoring-plugins.spec
 /stamp-h1
 /test.pl
 /THANKS
@@ -37,6 +38,8 @@ NP-VERSION-FILE
 
 # /doc/
 /doc/developer-guidelines.html
+/doc/developer-guidelines.html.last
+/doc/jade-out.fot
 
 # /tap/
 /tap/.deps
@@ -59,6 +62,8 @@ NP-VERSION-FILE
 /gl/fcntl.h
 /gl/float.h
 /gl/getopt.h
+/gl/glthread/.deps
+/gl/glthread/.dirstamp
 /gl/langinfo.h
 /gl/libgnu.a
 /gl/locale.h
@@ -69,12 +74,14 @@ NP-VERSION-FILE
 /gl/netinet_in.h
 /gl/ref-add.sed
 /gl/ref-del.sed
+/gl/stdalign.h
 /gl/stdbool.h
 /gl/stddef.h
 /gl/stdint.h
 /gl/stdio.h
 /gl/stdlib.h
 /gl/string.h
+/gl/strings.h
 /gl/sys_socket.h
 /gl/sys_stat.h
 /gl/sys
@@ -87,7 +94,7 @@ NP-VERSION-FILE
 # /lib/
 /lib/.deps
 /lib/getopt.h
-/lib/libnagiosplug.a
+/lib/libmonitoringplug.a
 /lib/Makefile
 /lib/Makefile.in
 
@@ -189,6 +196,7 @@ NP-VERSION-FILE
 /plugins/.libs
 /plugins/Makefile
 /plugins/Makefile.in
+/plugins/libnpcommon.a
 /plugins/negate
 /plugins/stamp-h*
 /plugins/urlize

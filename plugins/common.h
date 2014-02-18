@@ -1,10 +1,10 @@
 /*****************************************************************************
 * 
-* Nagios plugins common include file
+* Monitoring Plugins common include file
 * 
 * License: GPL
 * Copyright (c) 1999 Ethan Galstad (nagios@nagios.org)
-* Copyright (c) 2003-2007 Nagios Plugins Development Team
+* Copyright (c) 2003-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -82,10 +82,12 @@
    getting that data
    Will return -1 if cannot get data
 */
-#ifdef HAVE_SYSCONF__SC_NPROCESSORS_CONF 
-#define GET_NUMBER_OF_CPUS() sysconf(_SC_NPROCESSORS_CONF)
+#if defined(HAVE_SYSCONF__SC_NPROCESSORS_ONLN)
+# define GET_NUMBER_OF_CPUS() sysconf(_SC_NPROCESSORS_ONLN)
+#elif defined (HAVE_SYSCONF__SC_NPROCESSORS_CONF)
+# define GET_NUMBER_OF_CPUS() sysconf(_SC_NPROCESSORS_CONF)
 #else
-#define GET_NUMBER_OF_CPUS() -1
+# define GET_NUMBER_OF_CPUS() -1
 #endif
 
 #ifdef TIME_WITH_SYS_TIME
@@ -115,9 +117,7 @@
 #include <getopt.h>
 #include "dirname.h"
 
-#ifdef HAVE_LOCALE_H
 #include <locale.h>
-#endif
 
 #ifdef HAVE_SYS_POLL_H
 # include "sys/poll.h"

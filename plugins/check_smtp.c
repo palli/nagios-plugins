@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_smtp plugin
+* Monitoring check_smtp plugin
 * 
 * License: GPL
-* Copyright (c) 2000-2007 Nagios Plugins Development Team
+* Copyright (c) 2000-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -30,7 +30,7 @@
 
 const char *progname = "check_smtp";
 const char *copyright = "2000-2007";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
@@ -99,9 +99,9 @@ char **responses = NULL;
 char *authtype = NULL;
 char *authuser = NULL;
 char *authpass = NULL;
-int warning_time = 0;
+double warning_time = 0;
 int check_warning_time = FALSE;
-int critical_time = 0;
+double critical_time = 0;
 int check_critical_time = FALSE;
 int verbose = 0;
 int use_ssl = FALSE;
@@ -417,9 +417,9 @@ main (int argc, char **argv)
 	elapsed_time = (double)microsec / 1.0e6;
 
 	if (result == STATE_OK) {
-		if (check_critical_time && elapsed_time > (double) critical_time)
+		if (check_critical_time && elapsed_time > critical_time)
 			result = STATE_CRITICAL;
-		else if (check_warning_time && elapsed_time > (double) warning_time)
+		else if (check_warning_time && elapsed_time > warning_time)
 			result = STATE_WARNING;
 	}
 
@@ -552,21 +552,19 @@ process_arguments (int argc, char **argv)
 			nresponses++;
 			break;
 		case 'c':									/* critical time threshold */
-			if (is_intnonneg (optarg)) {
-				critical_time = atoi (optarg);
-				check_critical_time = TRUE;
-			}
+			if (!is_nonnegative (optarg))
+				usage4 (_("Critical time must be a positive"));
 			else {
-				usage4 (_("Critical time must be a positive integer"));
+				critical_time = strtod (optarg, NULL);
+				check_critical_time = TRUE;
 			}
 			break;
 		case 'w':									/* warning time threshold */
-			if (is_intnonneg (optarg)) {
-				warning_time = atoi (optarg);
-				check_warning_time = TRUE;
-			}
+			if (!is_nonnegative (optarg))
+				usage4 (_("Warning time must be a positive"));
 			else {
-				usage4 (_("Warning time must be a positive integer"));
+				warning_time = strtod (optarg, NULL);
+				check_warning_time = TRUE;
 			}
 			break;
 		case 'v':									/* verbose */
@@ -824,7 +822,7 @@ print_help (void)
    
 	printf (UT_WARN_CRIT);
 
-	printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+	printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 
 	printf (UT_VERBOSE);
 

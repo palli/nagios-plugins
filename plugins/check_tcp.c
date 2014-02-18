@@ -1,41 +1,45 @@
 /*****************************************************************************
-* 
-* Nagios check_tcp plugin
-* 
+*
+* Monitoring check_tcp plugin
+*
 * License: GPL
-* Copyright (c) 1999-2008 Nagios Plugins Development Team
-* 
+* Copyright (c) 1999-2013 Monitoring Plugins Development Team
+*
 * Description:
-* 
+*
 * This file contains the check_tcp plugin
-* 
-* 
+*
+*
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * This program is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *
 * $Id$
-* 
+*
 *****************************************************************************/
 
 /* progname "check_tcp" changes depending on symlink called */
 char *progname;
 const char *copyright = "1999-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
+
+#include <ctype.h>
 
 #include "common.h"
 #include "netutils.h"
 #include "utils.h"
 #include "utils_tcp.h"
+
+#include <sys/select.h>
 
 #ifdef HAVE_SSL
 static int check_cert = FALSE;
@@ -58,9 +62,11 @@ static char *SEND = NULL;
 static char *QUIT = NULL;
 static int PROTOCOL = IPPROTO_TCP; /* most common is default */
 static int PORT = 0;
+static int READ_TIMEOUT = 2;
 
 static int server_port = 0;
 static char *server_address = NULL;
+static int host_specified = FALSE;
 static char *server_send = NULL;
 static char *server_quit = NULL;
 static char **server_expect;
@@ -79,15 +85,14 @@ static int sd = 0;
 #define MAXBUF 1024
 static char buffer[MAXBUF];
 static int expect_mismatch_state = STATE_WARNING;
+static int match_flags = NP_MATCH_EXACT;
 
 #define FLAG_SSL 0x01
 #define FLAG_VERBOSE 0x02
-#define FLAG_EXACT_MATCH 0x04
-#define FLAG_TIME_WARN 0x08
-#define FLAG_TIME_CRIT 0x10
-#define FLAG_HIDE_OUTPUT 0x20
-#define FLAG_MATCH_ALL 0x40
-static size_t flags = FLAG_EXACT_MATCH;
+#define FLAG_TIME_WARN 0x04
+#define FLAG_TIME_CRIT 0x08
+#define FLAG_HIDE_OUTPUT 0x10
+static size_t flags;
 
 int
 main (int argc, char **argv)
@@ -96,8 +101,12 @@ main (int argc, char **argv)
 	int i;
 	char *status = NULL;
 	struct timeval tv;
+	struct timeval timeout;
 	size_t len;
 	int match = -1;
+	fd_set rfds;
+
+	FD_ZERO(&rfds);
 
 	setlocale (LC_ALL, "");
 	bindtextdomain (PACKAGE, LOCALEDIR);
@@ -275,33 +284,39 @@ main (int argc, char **argv)
 			status = realloc(status, len + i + 1);
 			memcpy(&status[len], buffer, i);
 			len += i;
+			status[len] = '\0';
 
-			/* stop reading if user-forced or data-starved */
-			if(i < sizeof(buffer) || (maxbytes && len >= maxbytes))
-				break;
-
+			/* stop reading if user-forced */
 			if (maxbytes && len >= maxbytes)
 				break;
+
+			if ((match = np_expect_match(status,
+			    server_expect,
+			    server_expect_count,
+			    match_flags)) != NP_MATCH_RETRY)
+				break;
+
+			/* some protocols wait for further input, so make sure we don't wait forever */
+			FD_SET(sd, &rfds);
+			timeout.tv_sec  = READ_TIMEOUT;
+			timeout.tv_usec = 0;
+			if(select(sd + 1, &rfds, NULL, NULL, &timeout) <= 0)
+				break;
 		}
+		if (match == NP_MATCH_RETRY)
+			match = NP_MATCH_FAILURE;
 
 		/* no data when expected, so return critical */
 		if (len == 0)
 			die (STATE_CRITICAL, _("No data received from host\n"));
 
-		/* force null-termination and strip whitespace from end of output */
-		status[len--] = '\0';
 		/* print raw output if we're debugging */
 		if(flags & FLAG_VERBOSE)
 			printf("received %d bytes from host\n#-raw-recv-------#\n%s\n#-raw-recv-------#\n",
 			       (int)len + 1, status);
-		while(isspace(status[len])) status[len--] = '\0';
-
-		match = np_expect_match(status,
-                                server_expect,
-                                server_expect_count,
-                                (flags & FLAG_MATCH_ALL ? TRUE : FALSE),
-                                (flags & FLAG_EXACT_MATCH ? TRUE : FALSE),
-                                (flags & FLAG_VERBOSE ? TRUE : FALSE));
+		/* strip whitespace from end of output */
+		while(--len > 0 && isspace(status[len]))
+			status[len] = '\0';
 	}
 
 	if (server_quit != NULL) {
@@ -321,7 +336,7 @@ main (int argc, char **argv)
 		result = STATE_WARNING;
 
 	/* did we get the response we hoped? */
-	if(match == FALSE && result != STATE_CRITICAL)
+	if(match == NP_MATCH_FAILURE && result != STATE_CRITICAL)
 		result = expect_mismatch_state;
 
 	/* reset the alarm */
@@ -332,10 +347,10 @@ main (int argc, char **argv)
 	 * the response we were looking for. if-else */
 	printf("%s %s - ", SERVICE, state_text(result));
 
-	if(match == FALSE && len && !(flags & FLAG_HIDE_OUTPUT))
+	if(match == NP_MATCH_FAILURE && len && !(flags & FLAG_HIDE_OUTPUT))
 		printf("Unexpected response from host/socket: %s", status);
 	else {
-		if(match == FALSE)
+		if(match == NP_MATCH_FAILURE)
 			printf("Unexpected response from host/socket on ");
 		else
 			printf("%.3f second response time on ", elapsed_time);
@@ -345,13 +360,13 @@ main (int argc, char **argv)
 			printf("socket %s", server_address);
 	}
 
-	if (match != FALSE && !(flags & FLAG_HIDE_OUTPUT) && len)
+	if (match != NP_MATCH_FAILURE && !(flags & FLAG_HIDE_OUTPUT) && len)
 		printf (" [%s]", status);
 
 	/* perf-data doesn't apply when server doesn't talk properly,
 	 * so print all zeroes on warn and crit. Use fperfdata since
 	 * localisation settings can make different outputs */
-	if(match == FALSE)
+	if(match == NP_MATCH_FAILURE)
 		printf ("|%s",
 				fperfdata ("time", elapsed_time, "s",
 				(flags & FLAG_TIME_WARN ? TRUE : FALSE), 0,
@@ -450,6 +465,7 @@ process_arguments (int argc, char **argv)
 			exit (STATE_OK);
 		case 'v':                 /* verbose mode */
 			flags |= FLAG_VERBOSE;
+			match_flags |= NP_MATCH_VERBOSE;
 			break;
 		case '4':
 			address_family = AF_INET;
@@ -462,6 +478,7 @@ process_arguments (int argc, char **argv)
 #endif
 			break;
 		case 'H':                 /* hostname */
+			host_specified = TRUE;
 			server_address = optarg;
 			break;
 		case 'c':                 /* critical */
@@ -505,7 +522,7 @@ process_arguments (int argc, char **argv)
 				xasprintf(&server_send, "%s", optarg);
 			break;
 		case 'e': /* expect string (may be repeated) */
-			flags &= ~FLAG_EXACT_MATCH;
+			match_flags &= ~NP_MATCH_EXACT;
 			if (server_expect_count == 0)
 				server_expect = malloc (sizeof (char *) * (++server_expect_count));
 			else
@@ -583,10 +600,14 @@ process_arguments (int argc, char **argv)
 #endif
 			break;
 		case 'A':
-			flags |= FLAG_MATCH_ALL;
+			match_flags |= NP_MATCH_ALL;
 			break;
 		}
 	}
+
+	c = optind;
+	if(host_specified == FALSE && c < argc)
+		server_address = strdup (argv[c++]);
 
 	if (server_address == NULL)
 		usage4 (_("You must provide a server address"));
@@ -649,7 +670,7 @@ print_help (void)
 
 	printf (UT_WARN_CRIT);
 
-	printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+	printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 
 	printf (UT_VERBOSE);
 
@@ -666,4 +687,3 @@ print_usage (void)
   printf ("[-t <timeout seconds>] [-r <refuse state>] [-M <mismatch state>] [-v] [-4|-6] [-j]\n");
   printf ("[-D <warn days cert expire>[,<crit days cert expire>]] [-S <use SSL>] [-E]\n");
 }
-

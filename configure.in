@@ -1,18 +1,16 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.59)
-AC_INIT(nagios-plugins,1.4.16)
+AC_INIT(monitoring-plugins,1.5)
 AC_CONFIG_SRCDIR(NPTest.pm)
 AC_CONFIG_FILES([gl/Makefile 
-	nagios-plugins.spec])
+	monitoring-plugins.spec])
 AC_CONFIG_AUX_DIR(build-aux)
 AM_INIT_AUTOMAKE([1.8.3])
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS([config.h])
 AC_CANONICAL_HOST
 
 RELEASE=1
 AC_SUBST(RELEASE)
-
-AC_PREFIX_DEFAULT(/usr/local/nagios)
 
 dnl Deprecated configure options
 
@@ -58,10 +56,10 @@ AC_SUBST(PLUGIN_TEST)dnl
 SCRIPT_TEST=`echo $srcdir/plugins-scripts/t/*.t|sed -e 's,\.*/plugins-scripts/,,g'`
 AC_SUBST(SCRIPT_TEST)dnl
 
-WARRANTY="The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n"
+WARRANTY="The Monitoring Plugins come with ABSOLUTELY NO WARRANTY. You may redistribute\ncopies of the plugins under the terms of the GNU General Public License.\nFor more information about these matters, see the file named COPYING.\n"
 AC_SUBST(WARRANTY)
 
-SUPPORT="Send email to nagios-users@lists.sourceforge.net if you have questions\nregarding use of this software. To submit patches or suggest improvements,\nsend email to nagiosplug-devel@lists.sourceforge.net.\nPlease include version information with all correspondence (when possible,\nuse output from the --version option of the plugin itself).\n"
+SUPPORT="Send email to help@monitoring-plugins.org if you have questions regarding use\nof this software. To submit patches or suggest improvements, send email to\ndevel@monitoring-plugins.org. Please include version information with all\ncorrespondence (when possible, use output from the --version option of the\nplugin itself).\n"
 AC_SUBST(SUPPORT)
 
 dnl CGIURL has changed for Nagios with 1.0 beta
@@ -194,7 +192,7 @@ AC_ARG_ENABLE(extra-opts,
   AC_HELP_STRING([--enable-extra-opts],
 		[Enables parsing of plugins ini config files for extra options (default: no)]),
 	[enable_extra_opts=$enableval],
-	[enable_extra_opts=no])
+	[enable_extra_opts=yes])
 AM_CONDITIONAL([USE_PARSE_INI],[test "$enable_extra_opts" = "yes"])
 if test "$enable_extra_opts" = "yes" ; then
 	AC_DEFINE(NP_EXTRA_OPTS,[1],[Enable INI file parsing.])
@@ -255,67 +253,96 @@ fi
 LIBS="$_SAVEDLIBS"
 CPPFLAGS="$_SAVEDCPPFLAGS"
 
+AC_ARG_WITH([dbi], [AS_HELP_STRING([--without-dbi], [Skips the dbi plugin])])
 dnl Check for DBI libraries
-_SAVEDLIBS="$LIBS"
-AC_CHECK_LIB(dbi,dbi_initialize)
-if test "$ac_cv_lib_dbi_dbi_initialize" = "yes"; then
-  EXTRAS="$EXTRAS check_dbi"
-	DBILIBS="-ldbi"
-  AC_SUBST(DBILIBS)
-else
-  AC_MSG_WARN([Skipping dbi plugin])
-  AC_MSG_WARN([install DBI libs to compile this plugin (see REQUIREMENTS).])
-fi
-LIBS="$_SAVEDLIBS"
+AS_IF([test "x$with_dbi" != "xno"], [
+  _SAVEDLIBS="$LIBS"
+  AC_CHECK_LIB(dbi,dbi_initialize)
+  if test "$ac_cv_lib_dbi_dbi_initialize" = "yes"; then
+    EXTRAS="$EXTRAS check_dbi"
+  	DBILIBS="-ldbi"
+    AC_SUBST(DBILIBS)
+  else
+    AC_MSG_WARN([Skipping dbi plugin])
+    AC_MSG_WARN([install DBI libs to compile this plugin (see REQUIREMENTS).])
+  fi
+  LIBS="$_SAVEDLIBS"
+])
+
+AC_ARG_WITH([radius], [AS_HELP_STRING([--without-radius], [Skips the radius plugin])])
 
 dnl Check for radius libraries
-_SAVEDLIBS="$LIBS"
-AC_CHECK_LIB(radiusclient,rc_read_config)
-if test "$ac_cv_lib_radiusclient_rc_read_config" = "yes"; then
-  EXTRAS="$EXTRAS check_radius"
-	RADIUSLIBS="-lradiusclient"
-  AC_SUBST(RADIUSLIBS)
-else
-  AC_CHECK_LIB(radiusclient-ng,rc_read_config)
-  if test "$ac_cv_lib_radiusclient_ng_rc_read_config" = "yes"; then
+AS_IF([test "x$with_radius" != "xno"], [
+  _SAVEDLIBS="$LIBS"
+  AC_CHECK_LIB(radiusclient,rc_read_config)
+  if test "$ac_cv_lib_radiusclient_rc_read_config" = "yes"; then
     EXTRAS="$EXTRAS check_radius"
-  	  RADIUSLIBS="-lradiusclient-ng"
+  	RADIUSLIBS="-lradiusclient"
     AC_SUBST(RADIUSLIBS)
   else
-    AC_MSG_WARN([Skipping radius plugin])
-    AC_MSG_WARN([install radius libs to compile this plugin (see REQUIREMENTS).])
+    AC_CHECK_LIB(radiusclient-ng,rc_read_config)
+    if test "$ac_cv_lib_radiusclient_ng_rc_read_config" = "yes"; then
+      EXTRAS="$EXTRAS check_radius"
+    	  RADIUSLIBS="-lradiusclient-ng"
+      AC_SUBST(RADIUSLIBS)
+    else
+      AC_MSG_WARN([Skipping radius plugin])
+      AC_MSG_WARN([install radius libs to compile this plugin (see REQUIREMENTS).])
+    fi
   fi
-fi
-LIBS="$_SAVEDLIBS"
+  LIBS="$_SAVEDLIBS"
+])
+
+AC_ARG_WITH([ldap], [AS_HELP_STRING([--without-ldap], [Skips the LDAP plugin])])
 
 dnl Check for LDAP libraries
-_SAVEDLIBS="$LIBS"
-AC_CHECK_LIB(ldap,main,,,-llber)
-if test "$ac_cv_lib_ldap_main" = "yes"; then
-  LDAPLIBS="-lldap -llber"\
-  LDAPINCLUDE="-I/usr/include/ldap"
-  AC_SUBST(LDAPLIBS)
-  AC_SUBST(LDAPINCLUDE)
-  AC_CHECK_FUNCS(ldap_set_option)
-  EXTRAS="$EXTRAS check_ldap"
-	AC_CHECK_FUNCS(ldap_init ldap_set_option ldap_get_option ldap_start_tls_s)
-else
-  AC_MSG_WARN([Skipping LDAP plugin])
-  AC_MSG_WARN([install LDAP libs to compile this plugin (see REQUIREMENTS).])
-fi
-LIBS="$_SAVEDLIBS"
+AS_IF([test "x$with_ldap" != "xno"], [
+  _SAVEDLIBS="$LIBS"
+  AC_CHECK_LIB(ldap,main,,,-llber)
+  if test "$ac_cv_lib_ldap_main" = "yes"; then
+    LDAPLIBS="-lldap -llber"\
+    LDAPINCLUDE="-I/usr/include/ldap"
+    AC_SUBST(LDAPLIBS)
+    AC_SUBST(LDAPINCLUDE)
+    AC_CHECK_FUNCS(ldap_set_option)
+    EXTRAS="$EXTRAS check_ldap"
+  	AC_CHECK_FUNCS(ldap_init ldap_set_option ldap_get_option ldap_start_tls_s)
+  else
+    AC_MSG_WARN([Skipping LDAP plugin])
+    AC_MSG_WARN([install LDAP libs to compile this plugin (see REQUIREMENTS).])
+  fi
+  LIBS="$_SAVEDLIBS"
+])
 
 dnl Check for headers used by check_ide_smart
-AC_CHECK_HEADER(linux/hdreg.h, FOUNDINCLUDE=yes, FOUNDINCLUDE=no)
-if test "$FOUNDINCLUDE" = "yes" ; then
-	AC_CHECK_HEADER(linux/types.h, FOUNDINCLUDE=yes, FOUNDINCLUDE=no)
-fi
+case $host in
+  *linux*)
+    AC_CHECK_HEADER(linux/hdreg.h, FOUNDINCLUDE=yes, FOUNDINCLUDE=no)
+    if test "$FOUNDINCLUDE" = "yes" ; then
+    	AC_CHECK_HEADER(linux/types.h, FOUNDINCLUDE=yes, FOUNDINCLUDE=no)
+    fi
+    if test "$FOUNDINCLUDE" = "no" ; then
+	AC_MSG_WARN([Skipping check_ide_smart plugin.])
+	AC_MSG_WARN([check_ide_smart requires linux/hdreg.h and linux/types.h.])
+    fi
+  ;;
+  *netbsd*)
+    AC_CHECK_HEADER(dev/ata/atareg.h, FOUNDINCLUDE=yes, FOUNDINCLUDE=no)
+    if test "$FOUNDINCLUDE" = "yes" ; then
+    	AC_CHECK_HEADER(dev/ic/wdcreg.h, FOUNDINCLUDE=yes, FOUNDINCLUDE=no)
+    fi
+    if test "$FOUNDINCLUDE" = "no" ; then
+	AC_MSG_WARN([Skipping check_ide_smart plugin.])
+	AC_MSG_WARN([check_ide_smart requires dev/ata/atareg.h and dev/ic/wdcreg.h])
+    fi
+  ;;
+  *)
+    AC_MSG_WARN([Skipping check_ide_smart plugin.])
+    AC_MSG_WARN([check_ide_smart works only on Linux and NetBSD])
+esac
 
 if test "$FOUNDINCLUDE" = "yes" ; then
 	EXTRAS="$EXTRAS check_ide_smart"
-else
-	AC_MSG_WARN([Skipping check_ide_smart plugin.])
-	AC_MSG_WARN([check_ide_smart is linux specific. It requires linux/hdreg.h and linux/types.h.])
 fi
 
 dnl Check for mysql libraries
@@ -331,6 +358,26 @@ else
   AC_SUBST(MYSQLINCLUDE)
   AC_SUBST(MYSQLLIBS)
   AC_SUBST(MYSQLCFLAGS)
+fi
+
+dnl Check for headers used by check_users
+AC_CHECK_HEADERS(utmpx.h)
+AM_CONDITIONAL([HAVE_UTMPX], [test "$ac_cv_header_utmpx_h" = "yes"])
+
+dnl Fallback to who(1) if the system doesn't provide an utmpx(5) interface
+if test "$ac_cv_header_utmpx_h" = "no"
+then
+	AC_PATH_PROG(PATH_TO_WHO,who)
+
+	if [$PATH_TO_WHO -q 2>/dev/null | egrep -i "^# users=[0-9]+$" >/dev/null]
+	then
+		ac_cv_path_to_who="$PATH_TO_WHO -q"
+	else
+		ac_cv_path_to_who="$PATH_TO_WHO"
+	fi
+
+	AC_DEFINE_UNQUOTED(WHO_COMMAND,"$ac_cv_path_to_who",
+		[path and arguments for invoking 'who'])
 fi
 
 AC_ARG_WITH([ipv6],
@@ -599,7 +646,7 @@ elif test "$ac_cv_uname_s" = "SunOS"; then
         ac_cv_ps_format="%s %d %d %d %d %d %f %s %n"
         ac_cv_ps_varlist="[procstat,&procuid,&procpid,&procppid,&procvsz,&procrss,&procpcpu,procprog,&pos]"
         ac_cv_ps_cols=9
-        AC_MSG_RESULT([using nagios-plugins internal ps command (pst3) for solaris])
+        AC_MSG_RESULT([using monitoring-plugins internal ps command (pst3) for solaris])
 	if test `isainfo -b` = 64 ; then
 		pst3_use_64bit=1
 		AC_MSG_NOTICE([using 64bit pst3])
@@ -1257,10 +1304,18 @@ if test -n "$ac_cv_nslookup_command"; then
 	AC_DEFINE_UNQUOTED(NSLOOKUP_COMMAND,"$ac_cv_nslookup_command", [path and args for nslookup])
 fi
 
-AC_MSG_CHECKING([for number of cpus])
+AC_MSG_CHECKING([for number of online cpus])
+AC_TRY_COMPILE([#include <unistd.h>],
+	[sysconf(_SC_NPROCESSORS_ONLN) > 0;],
+	AC_DEFINE(HAVE_SYSCONF__SC_NPROCESSORS_ONLN,1,[Define if sysconf returns number of online cpus])
+	AC_MSG_RESULT([sysconf(_SC_NPROCESSORS_ONLN)]),
+	AC_MSG_RESULT([cannot calculate])
+	)
+
+AC_MSG_CHECKING([for number of available cpus])
 AC_TRY_COMPILE([#include <unistd.h>],
 	[sysconf(_SC_NPROCESSORS_CONF) > 0;],
-	AC_DEFINE(HAVE_SYSCONF__SC_NPROCESSORS_CONF,1,[Define if sysconf returns number of cpus])
+	AC_DEFINE(HAVE_SYSCONF__SC_NPROCESSORS_CONF,1,[Define if sysconf returns number of available cpus])
 	AC_MSG_RESULT([sysconf(_SC_NPROCESSORS_CONF)]),
 	AC_MSG_RESULT([cannot calculate])
 	)
@@ -1296,19 +1351,6 @@ then
 else
 	AC_MSG_WARN([Get smbclient from Samba.org to monitor SMB shares])
 fi
-
-
-AC_PATH_PROG(PATH_TO_WHO,who)
-
-if [$PATH_TO_WHO -q 2>/dev/null | egrep -i "^# users=[0-9]+$" >/dev/null]
-then
-	ac_cv_path_to_who="$PATH_TO_WHO -q"
-else
-	ac_cv_path_to_who="$PATH_TO_WHO"
-fi
-
-AC_DEFINE_UNQUOTED(WHO_COMMAND,"$ac_cv_path_to_who",
-	[path and arguments for invoking 'who'])
 
 AC_PATH_PROG(PATH_TO_SNMPGET,snmpget)
 AC_ARG_WITH(snmpget_command,
@@ -1367,13 +1409,22 @@ then
 fi
 
 AC_PATH_PROG(PATH_TO_FPING,fping)
+AC_PATH_PROG(PATH_TO_FPING6,fping6)
+
 AC_ARG_WITH(fping_command,
             ACX_HELP_STRING([--with-fping-command=PATH],
                             [Path to fping command]), PATH_TO_FPING=$withval)
+AC_ARG_WITH(fping6_command,
+            ACX_HELP_STRING([--with-fping6-command=PATH],
+                            [Path to fping6 command]), PATH_TO_FPING6=$withval)
+
 if test -n "$PATH_TO_FPING"
 then
 	AC_DEFINE_UNQUOTED(PATH_TO_FPING,"$PATH_TO_FPING",[path to fping])
 	EXTRAS="$EXTRAS check_fping"
+	if test x"$with_ipv6" != xno && test -n "$PATH_TO_FPING6"; then
+		AC_DEFINE_UNQUOTED(PATH_TO_FPING6,"$PATH_TO_FPING6",[path to fping6])
+	fi
 else
 	AC_MSG_WARN([Get fping from http://www.fping.com in order to make check_fping plugin])
 fi
@@ -1678,7 +1729,7 @@ AC_ARG_ENABLE(redhat-pthread-workaround,
 	[ac_cv_enable_redhat_pthread_workaround=test])
 if test "$ac_cv_enable_redhat_pthread_workaround" = "test" ; then
 	if echo $ac_cv_uname_r | egrep "\.EL(smp)?$" >/dev/null 2>&1 ; then
-		AC_MSG_NOTICE([See http://nagiosplugins.org/faq/compile/configure_appears_to_hang if this next part takes a long time])
+		AC_MSG_NOTICE([See https://www.monitoring-plugins.org/doc/faq/configure-hangs.html if this next part takes a long time])
 		AC_MSG_CHECKING(for redhat spopen problem)
 		( cd config_test && make && make test ) > /dev/null 2>&1
 		if test $? -eq 0 ; then
@@ -1695,7 +1746,7 @@ fi
 dnl Perl modules
 AC_ARG_ENABLE(perl-modules,
 	AC_HELP_STRING([--enable-perl-modules],
-		[Enables installation of Nagios::Plugin and its dependencies (default: no)]),
+		[Enables installation of Monitoring::Plugin and its dependencies (default: no)]),
 	[enable_perl_modules=$enableval],
 	[enable_perl_modules=no])
 if test "$enable_perl_modules" = "yes" ; then
@@ -1734,7 +1785,6 @@ AC_OUTPUT(
   plugins-scripts/utils.pm
   plugins-scripts/utils.sh
   perlmods/Makefile
-  command.cfg
   test.pl
   pkg/solaris/pkginfo
   po/Makefile.in

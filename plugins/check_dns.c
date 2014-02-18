@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_dns plugin
+* Monitoring check_dns plugin
 * 
 * License: GPL
-* Copyright (c) 2000-2008 Nagios Plugins Development Team
+* Copyright (c) 2000-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -31,7 +31,7 @@
 
 const char *progname = "check_dns";
 const char *copyright = "2000-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "utils.h"
@@ -91,7 +91,7 @@ main (int argc, char **argv)
   textdomain (PACKAGE);
 
   /* Set signal handling and alarm */
-  if (signal (SIGALRM, popen_timeout_alarm_handler) == SIG_ERR) {
+  if (signal (SIGALRM, runcmd_timeout_alarm_handler) == SIG_ERR) {
     usage_va(_("Cannot catch SIGALRM"));
   }
 
@@ -474,7 +474,7 @@ print_help (void)
   printf (" -c, --critical=seconds\n");
   printf ("    %s\n", _("Return critical if elapsed time exceeds value. Default off"));
 
-  printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+  printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 
   printf (UT_SUPPORT);
 }

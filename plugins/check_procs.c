@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_procs plugin
+* Monitoring check_procs plugin
 * 
 * License: GPL
-* Copyright (c) 2000-2008 Nagios Plugins Development Team
+* Copyright (c) 2000-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -34,7 +34,7 @@
 const char *progname = "check_procs";
 const char *program_name = "check_procs";  /* Required for coreutils libs */
 const char *copyright = "2000-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "utils.h"
@@ -42,18 +42,21 @@ const char *email = "nagiosplug-devel@lists.sourceforge.net";
 #include "regex.h"
 
 #include <pwd.h>
+#include <errno.h>
+
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
 
 int process_arguments (int, char **);
 int validate_arguments (void);
-int check_thresholds (int);
 int convert_to_seconds (char *); 
 void print_help (void);
 void print_usage (void);
 
-int wmax = -1;
-int cmax = -1;
-int wmin = -1;
-int cmin = -1;
+char *warning_range = NULL;
+char *critical_range = NULL;
+thresholds *procs_thresholds = NULL;
 
 int options = 0; /* bitmask of filter criteria to test against */
 #define ALL 1
@@ -67,6 +70,10 @@ int options = 0; /* bitmask of filter criteria to test against */
 #define PCPU 256
 #define ELAPSED 512
 #define EREG_ARGS 1024
+
+#define KTHREAD_PARENT "kthreadd" /* the parent process of kernel threads:
+							ppid of procs are compared to pid of this proc*/
+
 /* Different metrics */
 char *metric_name;
 enum metric {
@@ -92,8 +99,20 @@ regex_t re_args;
 char *fmt;
 char *fails;
 char tmp[MAX_INPUT_BUFFER];
+int kthread_filter = 0;
+int usepid = 0; /* whether to test for pid or /proc/pid/exe */
 
 FILE *ps_input = NULL;
+
+static int
+stat_exe (const pid_t pid, struct stat *buf) {
+	char *path;
+	int ret;
+	xasprintf(&path, "/proc/%d/exe", pid);
+	ret = stat(path, buf);
+	free(path);
+	return ret;
+}
 
 
 int
@@ -104,9 +123,14 @@ main (int argc, char **argv)
 	char *procprog;
 
 	pid_t mypid = 0;
+	pid_t myppid = 0;
+	struct stat statbuf;
+	dev_t mydev = 0;
+	ino_t myino = 0;
 	int procuid = 0;
 	pid_t procpid = 0;
 	pid_t procppid = 0;
+	pid_t kthread_ppid = 0;
 	int procvsz = 0;
 	int procrss = 0;
 	int procseconds = 0;
@@ -127,6 +151,7 @@ main (int argc, char **argv)
 	int crit = 0; /* number of processes in crit state */
 	int i = 0, j = 0;
 	int result = STATE_UNKNOWN;
+	int ret = 0;
 	output chld_out, chld_err;
 
 	setlocale (LC_ALL, "");
@@ -146,8 +171,17 @@ main (int argc, char **argv)
 	if (process_arguments (argc, argv) == ERROR)
 		usage4 (_("Could not parse arguments"));
 
-	/* get our pid */
+	/* find ourself */
 	mypid = getpid();
+	myppid = getppid();
+	if (usepid || stat_exe(mypid, &statbuf) == -1) {
+		/* usepid might have been set by -T */
+		usepid = 1;
+	} else {
+		usepid = 0;
+		mydev = statbuf.st_dev;
+		myino = statbuf.st_ino;
+	}
 
 	/* Set signal handling and alarm timeout */
 	if (signal (SIGALRM, timeout_alarm_handler) == SIG_ERR) {
@@ -202,7 +236,34 @@ main (int argc, char **argv)
 					procetime, procprog, procargs);
 
 			/* Ignore self */
-			if (mypid == procpid) continue;
+			if ((usepid && mypid == procpid) ||
+				(!usepid && ((ret = stat_exe(procpid, &statbuf) != -1) && statbuf.st_dev == mydev && statbuf.st_ino == myino) ||
+				 (ret == -1 && errno == ENOENT))) {
+				if (verbose >= 3)
+					 printf("not considering - is myself or gone\n");
+				continue;
+			}
+			/* Ignore parent*/
+			else if (myppid == procpid) {
+				if (verbose >= 3)
+					 printf("not considering - is parent\n");
+				continue;
+			}
+
+			/* filter kernel threads (childs of KTHREAD_PARENT)*/
+			/* TODO adapt for other OSes than GNU/Linux
+					sorry for not doing that, but I've no other OSes to test :-( */
+			if (kthread_filter == 1) {
+				/* get pid KTHREAD_PARENT */
+				if (kthread_ppid == 0 && !strcmp(procprog, KTHREAD_PARENT) )
+					kthread_ppid = procpid;
+
+				if (kthread_ppid == procppid) {
+					if (verbose >= 2)
+						printf ("Ignore kernel thread: pid=%d ppid=%d prog=%s args=%s\n", procpid, procppid, procprog, procargs);
+					continue;
+				}
+			}
 
 			if ((options & STAT) && (strstr (statopts, procstat)))
 				resultsum |= STAT;
@@ -238,14 +299,14 @@ main (int argc, char **argv)
 			}
 
 			if (metric == METRIC_VSZ)
-				i = check_thresholds (procvsz);
+				i = get_status ((double)procvsz, procs_thresholds);
 			else if (metric == METRIC_RSS)
-				i = check_thresholds (procrss);
+				i = get_status ((double)procrss, procs_thresholds);
 			/* TODO? float thresholds for --metric=CPU */
 			else if (metric == METRIC_CPU)
-				i = check_thresholds ((int)procpcpu); 
+				i = get_status (procpcpu, procs_thresholds);
 			else if (metric == METRIC_ELAPSED)
-				i = check_thresholds (procseconds);
+				i = get_status ((double)procseconds, procs_thresholds);
 
 			if (metric != METRIC_PROCS) {
 				if (i == STATE_WARNING) {
@@ -276,7 +337,7 @@ main (int argc, char **argv)
 
 	/* Needed if procs found, but none match filter */
 	if ( metric == METRIC_PROCS ) {
-		result = max_state (result, check_thresholds (procs) );
+		result = max_state (result, get_status ((double)procs, procs_thresholds) );
 	}
 
 	if ( result == STATE_OK ) {
@@ -300,6 +361,13 @@ main (int argc, char **argv)
 
 	if ( verbose >= 1 && strcmp(fails,"") )
 		printf (" [%s]", fails);
+
+	if (metric == METRIC_PROCS)
+		printf (" | procs=%d;%s;%s;0;", procs,
+				warning_range ? warning_range : "",
+				critical_range ? critical_range : "");
+	else
+		printf (" | procs=%d;;;0; procs_warn=%d;;;0; procs_crit=%d;;;0;", procs, warn, crit);
 
 	printf ("\n");
 	return result;
@@ -327,6 +395,7 @@ process_arguments (int argc, char **argv)
 		{"timeout", required_argument, 0, 't'},
 		{"status", required_argument, 0, 's'},
 		{"ppid", required_argument, 0, 'p'},
+		{"user", required_argument, 0, 'u'},
 		{"command", required_argument, 0, 'C'},
 		{"vsz", required_argument, 0, 'z'},
 		{"rss", required_argument, 0, 'r'},
@@ -338,6 +407,8 @@ process_arguments (int argc, char **argv)
 		{"verbose", no_argument, 0, 'v'},
 		{"ereg-argument-array", required_argument, 0, CHAR_MAX+1},
 		{"input-file", required_argument, 0, CHAR_MAX+2},
+		{"no-kthreads", required_argument, 0, 'k'},
+		{"traditional-filter", no_argument, 0, 'T'},
 		{0, 0, 0, 0}
 	};
 
@@ -346,7 +417,7 @@ process_arguments (int argc, char **argv)
 			strcpy (argv[c], "-t");
 
 	while (1) {
-		c = getopt_long (argc, argv, "Vvht:c:w:p:s:u:C:a:z:r:m:P:", 
+		c = getopt_long (argc, argv, "Vvhkt:c:w:p:s:u:C:a:z:r:m:P:T",
 			longopts, &option);
 
 		if (c == -1 || c == EOF)
@@ -368,28 +439,10 @@ process_arguments (int argc, char **argv)
 				timeout_interval = atoi (optarg);
 			break;
 		case 'c':									/* critical threshold */
-			if (is_integer (optarg))
-				cmax = atoi (optarg);
-			else if (sscanf (optarg, ":%d", &cmax) == 1)
-				break;
-			else if (sscanf (optarg, "%d:%d", &cmin, &cmax) == 2)
-				break;
-			else if (sscanf (optarg, "%d:", &cmin) == 1)
-				break;
-			else
-				usage4 (_("Critical Process Count must be an integer!"));
+			critical_range = optarg;
 			break;							 
 		case 'w':									/* warning threshold */
-			if (is_integer (optarg))
-				wmax = atoi (optarg);
-			else if (sscanf (optarg, ":%d", &wmax) == 1)
-				break;
-			else if (sscanf (optarg, "%d:%d", &wmin, &wmax) == 2)
-				break;
-			else if (sscanf (optarg, "%d:", &wmin) == 1)
-				break;
-			else
-				usage4 (_("Warning Process Count must be an integer!"));
+			warning_range = optarg;
 			break;
 		case 'p':									/* process id */
 			if (sscanf (optarg, "%d%[^0-9]", &ppid, tmp) == 1) {
@@ -508,8 +561,14 @@ process_arguments (int argc, char **argv)
 			}
 				
 			usage4 (_("Metric must be one of PROCS, VSZ, RSS, CPU, ELAPSED!"));
+		case 'k':	/* linux kernel thread filter */
+			kthread_filter = 1;
+			break;
 		case 'v':									/* command */
 			verbose++;
+			break;
+		case 'T':
+			usepid = 1;
 			break;
 		case CHAR_MAX+2:
 			input_filename = optarg;
@@ -518,15 +577,18 @@ process_arguments (int argc, char **argv)
 	}
 
 	c = optind;
-	if (wmax == -1 && argv[c])
-		wmax = atoi (argv[c++]);
-	if (cmax == -1 && argv[c])
-		cmax = atoi (argv[c++]);
+	if ((! warning_range) && argv[c])
+		warning_range = argv[c++];
+	if ((! critical_range) && argv[c])
+		critical_range = argv[c++];
 	if (statopts == NULL && argv[c]) {
 		xasprintf (&statopts, "%s", argv[c++]);
 		xasprintf (&fmt, _("%s%sSTATE = %s"), (fmt ? fmt : ""), (options ? ", " : ""), statopts);
 		options |= STAT;
 	}
+
+	/* this will abort in case of invalid ranges */
+	set_thresholds (&procs_thresholds, warning_range, critical_range);
 
 	return validate_arguments ();
 }
@@ -536,27 +598,6 @@ process_arguments (int argc, char **argv)
 int
 validate_arguments ()
 {
-
-	if (wmax >= 0 && wmin == -1)
-		wmin = 0;
-	if (cmax >= 0 && cmin == -1)
-		cmin = 0;
-	if (wmax >= wmin && cmax >= cmin) {	/* standard ranges */
-		if (wmax > cmax && cmax != -1) {
-			printf (_("wmax (%d) cannot be greater than cmax (%d)\n"), wmax, cmax);
-			return ERROR;
-		}
-		if (cmin > wmin && wmin != -1) {
-			printf (_("wmin (%d) cannot be less than cmin (%d)\n"), wmin, cmin);
-			return ERROR;
-		}
-	}
-
-/* 	if (wmax == -1 && cmax == -1 && wmin == -1 && cmin == -1) { */
-/* 		printf ("At least one threshold must be set\n"); */
-/* 		return ERROR; */
-/* 	} */
-
 	if (options == 0)
 		options = ALL;
 
@@ -576,40 +617,6 @@ validate_arguments ()
 		fails = strdup("");
 
 	return options;
-}
-
-
-
-/* Check thresholds against value */
-int
-check_thresholds (int value)
-{
- 	if (wmax == -1 && cmax == -1 && wmin == -1 && cmin == -1) {
-		return OK;
- 	}
-	else if (cmax >= 0 && cmin >= 0 && cmax < cmin) {
-		if (value > cmax && value < cmin)
-			return STATE_CRITICAL;
-	}
-	else if (cmax >= 0 && value > cmax) {
-		return STATE_CRITICAL;
-	}
-	else if (cmin >= 0 && value < cmin) {
-		return STATE_CRITICAL;
-	}
-
-	if (wmax >= 0 && wmin >= 0 && wmax < wmin) {
-		if (value > wmax && value < wmin) {
-			return STATE_WARNING;
-		}
-	}
-	else if (wmax >= 0 && value > wmax) {
-		return STATE_WARNING;
-	}
-	else if (wmin >= 0 && value < wmin) {
-		return STATE_WARNING;
-	}
-	return STATE_OK;
 }
 
 
@@ -708,10 +715,13 @@ print_help (void)
 #if defined( __linux__ )
 	printf ("  %s\n", _("ELAPSED - time elapsed in seconds"));
 #endif /* defined(__linux__) */
-	printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+	printf (UT_PLUG_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 
 	printf (" %s\n", "-v, --verbose");
   printf ("    %s\n", _("Extra information. Up to 3 verbosity levels"));
+
+  printf (" %s\n", "-T, --traditional");
+  printf ("   %s\n", _("Filter own process the traditional way by PID instead of /proc/pid/exe"));
 
   printf ("\n");
 	printf ("%s\n", "Filters:");
@@ -735,6 +745,8 @@ print_help (void)
   printf ("   %s\n", _("Only scan for processes with args that contain the regex STRING."));
   printf (" %s\n", "-C, --command=COMMAND");
   printf ("   %s\n", _("Only scan for exact matches of COMMAND (without path)."));
+  printf (" %s\n", "-k, --no-kthreads");
+  printf ("   %s\n", _("Only scan for non kernel threads (works on Linux only)."));
 
 	printf(_("\n\
 RANGEs are specified 'min:max' or 'min:' or ':max' (or 'max'). If\n\
@@ -769,5 +781,5 @@ print_usage (void)
   printf ("%s\n", _("Usage:"));
 	printf ("%s -w <range> -c <range> [-m metric] [-s state] [-p ppid]\n", progname);
   printf (" [-u user] [-r rss] [-z vsz] [-P %%cpu] [-a argument-array]\n");
-  printf (" [-C command] [-t timeout] [-v]\n");
+  printf (" [-C command] [-k] [-t timeout] [-v]\n");
 }

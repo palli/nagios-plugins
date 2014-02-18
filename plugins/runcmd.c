@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios run command utilities
+* Monitoring run command utilities
 * 
 * License: GPL
-* Copyright (c) 2005-2006 Nagios Plugins Development Team
+* Copyright (c) 2005-2006 Monitoring Plugins Development Team
 * 
 * Description :
 * 
@@ -256,7 +256,7 @@ np_runcmd_close(int fd)
 
 
 void
-popen_timeout_alarm_handler (int signo)
+runcmd_timeout_alarm_handler (int signo)
 {
 	size_t i;
 

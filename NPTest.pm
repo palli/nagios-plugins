@@ -1,7 +1,7 @@
 package NPTest;
 
 #
-# Helper Functions for testing Nagios Plugins
+# Helper Functions for testing Monitoring Plugins
 #
 
 require Exporter;
@@ -25,14 +25,14 @@ $VERSION = "1556."; # must be all one line, for MakeMaker
 
 =head1 NAME
 
-NPTest - Simplify the testing of Nagios Plugins
+NPTest - Simplify the testing of Monitoring Plugins
 
 =head1 DESCRIPTION
 
 This modules provides convenience functions to assist in the testing
-of Nagios Plugins, making the testing code easier to read and write;
+of Monitoring Plugins, making the testing code easier to read and write;
 hopefully encouraging the development of a more complete test suite for
-the Nagios Plugins. It is based on the patterns of testing seen in the
+the Monitoring Plugins. It is based on the patterns of testing seen in the
 1.4.0 release, and continues to use the L<Test> module as the basis of
 testing.
 
@@ -92,7 +92,7 @@ Testing of results would be done in your test script, not in this module.
 This function is obsolete. Use C<testCmd()> instead.
 
 This function attempts to encompass the majority of test styles used
-in testing Nagios Plugins. As each plug-in is a separate command, the
+in testing Monitoring Plugins. As each plug-in is a separate command, the
 typical tests we wish to perform are against the exit status of the
 command and the output (if any) it generated. Simplifying these tests
 into a single function call, makes the test harness easier to read and
@@ -132,7 +132,7 @@ of either C<Test::ok(...)> or C<Test::skip(...)>, so remember this
 when counting the number of tests to place in the C<Test::plan(...)>
 call.
 
-Many Nagios Plugins test network services, some of which may not be
+Many Monitoring Plugins test network services, some of which may not be
 present on all systems. To cater for this, C<checkCmd(...)> allows the
 tester to define exceptions based on the command's exit status. These
 exceptions are provided to skip tests if the test case developer
@@ -199,7 +199,7 @@ Copyright (c) 2005 Peter Bray.  All rights reserved.
 
 This package is free software and is provided "as is" without express
 or implied warranty.  It may be used, redistributed and/or modified
-under the same terms as the Nagios Plugins release.
+under the same terms as the Monitoring Plugins release.
 
 =cut
 
@@ -347,7 +347,7 @@ sub getTestParameter
   }
 
   # Set "none" if no terminal attached (eg, tinderbox build servers when new variables set)
-  return "" unless (-t STDERR);
+  return "" unless (-t STDIN);
 
   my $userResponse = "";
 
@@ -422,6 +422,7 @@ sub LoadCache
 {
   return if exists( $CACHE{'_cache_loaded_'} );
 
+  my $fileContents = "";
   if ( -f $CACHEFILENAME )
   {
     my( $fileHandle ) = new IO::File;
@@ -432,40 +433,45 @@ sub LoadCache
       return;
     }
 
-    my( $fileContents ) = join( "\n", <$fileHandle> );
-
+    $fileContents = join("", <$fileHandle>);
     $fileHandle->close();
 
+    chomp($fileContents);
     my( $contentsRef ) = eval $fileContents;
-    %CACHE = %{$contentsRef};
+    %CACHE = %{$contentsRef} if (defined($contentsRef));
 
   }
 
-  $CACHE{'_cache_loaded_'} = 1;
+  $CACHE{'_cache_loaded_'}  = 1;
+  $CACHE{'_original_cache'} = $fileContents;
 }
 
 
 sub SaveCache
 {
   delete $CACHE{'_cache_loaded_'};
+  my $oldFileContents = delete $CACHE{'_original_cache'};
 
-  my( $fileHandle ) = new IO::File;
+  my($dataDumper) = new Data::Dumper([\%CACHE]);
+  $dataDumper->Terse(1);
+  $dataDumper->Sortkeys(1);
+  my $data = $dataDumper->Dump();
+  $data =~ s/^\s+/  /gmx; # make sure all systems use same amount of whitespace
+  $data =~ s/^\s+}/}/gmx;
+  chomp($data);
 
-  if ( ! $fileHandle->open( "> ${CACHEFILENAME}" ) )
-  {
-    print STDERR "NPTest::LoadCache() : Problem saving ${CACHEFILENAME} : $!\n";
-    return;
+  if($oldFileContents ne $data) {
+    my($fileHandle) = new IO::File;
+    if (!$fileHandle->open( "> ${CACHEFILENAME}")) {
+      print STDERR "NPTest::LoadCache() : Problem saving ${CACHEFILENAME} : $!\n";
+      return;
+    }
+    print $fileHandle $data;
+    $fileHandle->close();
   }
 
-  my( $dataDumper ) = new Data::Dumper( [ \%CACHE ] );
-
-  $dataDumper->Terse(1);
-
-  print $fileHandle $dataDumper->Dump();
-
-  $fileHandle->close();
-
-  $CACHE{'_cache_loaded_'} = 1;
+  $CACHE{'_cache_loaded_'}  = 1;
+  $CACHE{'_original_cache'} = $data;
 }
 
 #
@@ -488,26 +494,35 @@ sub SetCacheFilename
 
 sub DetermineTestHarnessDirectory
 {
-  my( $userSupplied ) = @_;
+  my( @userSupplied ) = @_;
+  my @dirs;
 
   # User Supplied
-  if ( defined( $userSupplied ) && $userSupplied )
+  if ( @userSupplied > 0 )
   {
-    if ( -d $userSupplied )
+    for my $u ( @userSupplied )
     {
-      return $userSupplied;
-    }
-    else
-    {
-      return undef; # userSupplied is invalid -> FAIL
+      if ( -d $u )
+      {
+        push ( @dirs, $u );
+      }
     }
   }
 
-  # Simple Case : "t" is a subdirectory of the current directory
+  # Simple Cases: "t" and tests are subdirectories of the current directory
   if ( -d "./t" )
   {
-    return "./t";
+    push ( @dirs, "./t");
   }
+  if ( -d "./tests" )
+  {
+    push ( @dirs, "./tests");
+  }
+
+	if ( @dirs > 0 )
+	{
+		return @dirs;
+	}
 
   # To be honest I don't understand which case satisfies the
   # original code in test.pl : when $tstdir == `pwd` w.r.t.
@@ -520,7 +535,7 @@ sub DetermineTestHarnessDirectory
 
   if ( $pwd =~ m|/t$| )
   {
-    return $pwd;
+    push ( @dirs, $pwd );
 
     # The alternate that might work better is
     # chdir( ".." );
@@ -529,7 +544,7 @@ sub DetermineTestHarnessDirectory
     # to be tested is in the current directory (ie "./check_disk ....")
   }
 
-  return undef;
+  return @dirs;
 }
 
 sub TestsFrom
@@ -555,12 +570,12 @@ sub TestsFrom
     {
       if ( $excludeIfAppMissing )
       {
-	$application = basename( $filename, ".t" );
-	if ( ! -e $application )
-	{
-	  print STDERR "No application (${application}) found for test harness (${filename})\n";
-	  next;
-	}
+        $application = basename( $filename, ".t" );
+        if ( ! -e $application and ! -e $application.'.pm' )
+        {
+          print STDERR "No application (${application}) found for test harness (${filename})\n";
+          next;
+        }
       }
       push @tests, "${directory}/${filename}";
     }
@@ -615,7 +630,10 @@ sub testCmd {
 	my $class = shift;
 	my $command = shift or die "No command passed to testCmd";
 	my $object = $class->new;
-	
+
+	local $SIG{'ALRM'} = sub { die("timeout in command: $command"); };
+	alarm(120); # no test should take longer than 120 seconds
+
 	my $output = `$command`;
 	$object->return_code($? >> 8);
 	$_ = $? & 127;
@@ -624,6 +642,8 @@ sub testCmd {
 	}
 	chomp $output;
 	$object->output($output);
+
+	alarm(0);
 
 	my ($pkg, $file, $line) = caller(0);
 	print "Testing: $command", $/;
@@ -634,6 +654,16 @@ sub testCmd {
 	}
 
 	return $object;
+}
+
+# do we have ipv6
+sub has_ipv6 {
+    # assume ipv6 if a ping6 to labs.consol.de works
+    `ping6 -c 1 2a03:3680:0:2::21 2>&1`;
+    if($? == 0) {
+        return 1;
+    }
+    return;
 }
 
 1;

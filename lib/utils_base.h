@@ -1,6 +1,6 @@
 #ifndef _UTILS_BASE_
 #define _UTILS_BASE_
-/* Header file for nagios plugins utils_base.c */
+/* Header file for Monitoring Plugins utils_base.c */
 
 #include "sha1.h"
 
@@ -52,7 +52,7 @@ typedef struct np_struct {
 	state_key *state;
 	int       argc;
 	char      **argv;
-	} nagios_plugin;
+	} monitoring_plugin;
 
 range *parse_range_string (char *);
 int _set_thresholds(thresholds **, char *, char *);
@@ -62,7 +62,7 @@ int check_range(double, range *);
 int get_status(double, thresholds *);
 
 /* All possible characters in a threshold range */
-#define NP_THRESHOLDS_CHARS "0123456789.:@~"
+#define NP_THRESHOLDS_CHARS "-0123456789.:@~"
 
 char *np_escaped_string (const char *);
 
@@ -79,6 +79,10 @@ int np_check_if_root(void);
  * code from the above function, in case it's helpful for testing */
 int np_warn_if_not_root(void);
 
+/* mp_suid() returns true if the real and effective uids differs, such as when
+ * running a suid plugin */
+#define mp_suid() (getuid() != geteuid())
+
 /*
  * Extract the value from key/value pairs, or return NULL. The value returned
  * can be free()ed.
@@ -93,6 +97,11 @@ char *np_extract_value(const char*, const char*, char);
  */
 #define np_extract_ntpvar(l, n) np_extract_value(l, n, ',')
 
+/*
+ * Read a string representing a state (ok, warning... or numeric: 0, 1) and
+ * return the corresponding NP_STATE or ERROR)
+ */
+int mp_translate_state (char *);
 
 void np_enable_state(char *, int);
 state_data *np_state_read();

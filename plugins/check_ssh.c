@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_ssh plugin
+* Monitoring check_ssh plugin
 * 
 * License: GPL
-* Copyright (c) 2000-2007 Nagios Plugins Development Team
+* Copyright (c) 2000-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -30,7 +30,7 @@
 
 const char *progname = "check_ssh";
 const char *copyright = "2000-2007";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
@@ -291,7 +291,7 @@ print_help (void)
 
 	printf (UT_IPv46);
 
-	printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+	printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 
 	printf (" %s\n", "-r, --remote-version=STRING");
   printf ("    %s\n", _("Warn if string doesn't match expected server version (ex: OpenSSH_3.9p1)"));
@@ -307,6 +307,6 @@ void
 print_usage (void)
 {
   printf ("%s\n", _("Usage:"));
-	printf ("%s [-46] [-t <timeout>] [-r <remote version>] [-p <port>] <host>\n", progname);
+	printf ("%s  [-4|-6] [-t <timeout>] [-r <remote version>] [-p <port>] <host>\n", progname);
 }
 

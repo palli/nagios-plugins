@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_dig plugin
+* Monitoring check_dig plugin
 * 
 * License: GPL
-* Copyright (c) 2002-2008 Nagios Plugins Development Team
+* Copyright (c) 2002-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -34,7 +34,7 @@
 
 const char *progname = "check_dig";
 const char *copyright = "2002-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
@@ -48,14 +48,17 @@ void print_usage (void);
 
 #define UNDEFINED 0
 #define DEFAULT_PORT 53
+#define DEFAULT_TRIES 3
 
 char *query_address = NULL;
 char *record_type = "A";
 char *expected_address = NULL;
 char *dns_server = NULL;
 char *dig_args = "";
+char *query_transport = "";
 int verbose = FALSE;
 int server_port = DEFAULT_PORT;
+int number_tries = DEFAULT_TRIES;
 double warning_interval = UNDEFINED;
 double critical_interval = UNDEFINED;
 struct timeval tv;
@@ -71,13 +74,14 @@ main (int argc, char **argv)
   long microsec;
   double elapsed_time;
   int result = STATE_UNKNOWN;
+  int timeout_interval_dig;
 
   setlocale (LC_ALL, "");
   bindtextdomain (PACKAGE, LOCALEDIR);
   textdomain (PACKAGE);
 
   /* Set signal handling and alarm */
-  if (signal (SIGALRM, popen_timeout_alarm_handler) == SIG_ERR)
+  if (signal (SIGALRM, runcmd_timeout_alarm_handler) == SIG_ERR)
     usage_va(_("Cannot catch SIGALRM"));
 
   /* Parse extra opts if any */
@@ -86,9 +90,12 @@ main (int argc, char **argv)
   if (process_arguments (argc, argv) == ERROR)
     usage_va(_("Could not parse arguments"));
 
+  /* dig applies the timeout to each try, so we need to work around this */
+  timeout_interval_dig = timeout_interval / number_tries + number_tries;
+
   /* get the command to run */
-  xasprintf (&command_line, "%s @%s -p %d %s -t %s %s",
-            PATH_TO_DIG, dns_server, server_port, query_address, record_type, dig_args);
+  xasprintf (&command_line, "%s @%s -p %d %s -t %s %s %s +tries=%d +time=%d",
+            PATH_TO_DIG, dns_server, server_port, query_address, record_type, dig_args, query_transport, number_tries, timeout_interval_dig);
 
   alarm (timeout_interval);
   gettimeofday (&tv, NULL);
@@ -199,6 +206,8 @@ process_arguments (int argc, char **argv)
     {"record_type", required_argument, 0, 'T'},
     {"expected_address", required_argument, 0, 'a'},
     {"port", required_argument, 0, 'p'},
+    {"use-ipv4", no_argument, 0, '4'},
+    {"use-ipv6", no_argument, 0, '6'},
     {0, 0, 0, 0}
   };
 
@@ -206,7 +215,7 @@ process_arguments (int argc, char **argv)
     return ERROR;
 
   while (1) {
-    c = getopt_long (argc, argv, "hVvt:l:H:w:c:T:p:a:A:", longopts, &option);
+    c = getopt_long (argc, argv, "hVvt:l:H:w:c:T:p:a:A:46", longopts, &option);
 
     if (c == -1 || c == EOF)
       break;
@@ -269,6 +278,12 @@ process_arguments (int argc, char **argv)
     case 'a':
       expected_address = optarg;
       break;
+    case '4':
+      query_transport = "-4";
+      break;
+    case '6':
+      query_transport = "-6";
+      break;
     default:                  /* usage5 */
       usage5();
     }
@@ -325,6 +340,10 @@ print_help (void)
 
   printf (UT_HOST_PORT, 'p', myport);
 
+  printf (" %s\n","-4, --use-ipv4");
+  printf ("    %s\n",_("Force dig to only use IPv4 query transport"));
+  printf (" %s\n","-6, --use-ipv6");
+  printf ("    %s\n",_("Force dig to only use IPv6 query transport"));
   printf (" %s\n","-l, --query_address=STRING");
   printf ("    %s\n",_("Machine name to lookup"));
   printf (" %s\n","-T, --record_type=STRING");
@@ -335,7 +354,7 @@ print_help (void)
   printf (" %s\n","-A, --dig-arguments=STRING");
   printf ("    %s\n",_("Pass STRING as argument(s) to dig"));
   printf (UT_WARN_CRIT);
-  printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+  printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
   printf (UT_VERBOSE);
 
   printf ("\n");

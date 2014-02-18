@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios plugins SSL utilities
+* Monitoring Plugins SSL utilities
 * 
 * License: GPL
-* Copyright (c) 2005-2010 Nagios Plugins Development Team
+* Copyright (c) 2005-2010 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -27,7 +27,6 @@
 *****************************************************************************/
 
 #define MAX_CN_LENGTH 256
-#define LOCAL_TIMEOUT_ALARM_HANDLER
 #include "common.h"
 #include "netutils.h"
 
@@ -45,7 +44,11 @@ int np_net_ssl_init_with_hostname(int sd, char *host_name) {
 }
 
 int np_net_ssl_init_with_hostname_and_version(int sd, char *host_name, int version) {
-	const SSL_METHOD *method = NULL;
+	return np_net_ssl_init_with_hostname_version_and_cert(sd, host_name, version, NULL, NULL);
+}
+
+int np_net_ssl_init_with_hostname_version_and_cert(int sd, char *host_name, int version, char *cert, char *privkey) {
+	SSL_METHOD *method = NULL;
 
 	switch (version) {
 	case 0: /* Deafult to auto negotiation */
@@ -80,9 +83,18 @@ int np_net_ssl_init_with_hostname_and_version(int sd, char *host_name, int versi
 		printf("%s\n", _("CRITICAL - Cannot create SSL context."));
 		return STATE_CRITICAL;
 	}
+	if (cert && privkey) {
+		SSL_CTX_use_certificate_file(c, cert, SSL_FILETYPE_PEM);
+		SSL_CTX_use_PrivateKey_file(c, privkey, SSL_FILETYPE_PEM);
+		if (!SSL_CTX_check_private_key(c)) {
+			printf ("%s\n", _("CRITICAL - Private key does not seem to match certificate!\n"));
+			return STATE_CRITICAL;
+		}
+	}
 #ifdef SSL_OP_NO_TICKET
 	SSL_CTX_set_options(c, SSL_OP_NO_TICKET);
 #endif
+	SSL_CTX_set_mode(c, SSL_MODE_AUTO_RETRY);
 	if ((s = SSL_new(c)) != NULL) {
 #ifdef SSL_set_tlsext_host_name
 		if (host_name != NULL)

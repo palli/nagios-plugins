@@ -1,18 +1,18 @@
 <!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook V4.1//EN" >
 <book>
-  <title>Nagios Plug-in Developer Guidelines</title>
+  <title>Monitoring Plugins Development Guidelines</title>
 
   <bookinfo>
     <authorgroup>
       <author>
         <affiliation>
-          <orgname>Nagios Plugins Development Team</orgname>
+          <orgname>Monitoring Plugins Development Team</orgname>
         </affiliation>
       </author>
     </authorgroup>
 
-    <pubdate>2009</pubdate>
-    <title>Nagios plug-in development guidelines</title>
+    <pubdate>2013</pubdate>
+    <title>Monitoring Plugins Development Guidelines</title>
 	
     <revhistory>
        <revision>
@@ -22,8 +22,8 @@
     </revhistory>
 
 	<copyright>
-		<year>2000 - 2009</year>
-		<holder>Nagios Plugins Development Team</holder>
+		<year>2000 - 2013</year>
+		<holder>Monitoring Plugins Development Team</holder>
 	</copyright>
 
 </bookinfo>
@@ -31,11 +31,11 @@
 
 <preface id="preface"><title>Preface</title>
     <para>The purpose of this guidelines is to provide a reference for
-    the plug-in developers and encourage the standarization of the
-    different kind of plug-ins: C, shell, perl, python, etc.</para>
+    the plugin developers and encourage the standarization of the
+    different kind of plugins: C, shell, perl, python, etc.</para>
 
-        <para>Nagios Plug-in Development Guidelines Copyright (C) 2000-2009
-        (Nagios Plugins Team)</para>
+        <para>Monitoring Plugins Development Guidelines Copyright (C) 2000-2013
+        (Monitoring Plugins Team)</para>
 
         <para>Permission is granted to make and distribute verbatim
         copies of this manual provided the copyright notice and this
@@ -48,8 +48,8 @@
 <article>
 <section id="DevRequirements"><title>Development platform requirements</title>
 	<para>
-	Nagios plugins are developed to the GNU standard, so any OS which is supported by GNU
-	should run the plugins. While the requirements for compiling the Nagios plugins release 
+	Monitoring Plugins are developed to the GNU standard, so any OS which is supported by GNU
+	should run the plugins. While the requirements for compiling the Monitoring Plugins release
 	are very basic, developing from the Git repository requires additional software to be
 	installed. These are the minimum levels of software required:
 
@@ -83,10 +83,18 @@
 		STDOUT and not print to STDERR.</para>
 
 		<section><title>Print only one line of text</title>
-		<para>Nagios will only grab the first line of text from STDOUT
-		when it notifies contacts about potential problems. If you print
-		multiple lines, you're out of luck (though this will be a feature of 
-		Nagios 3). Remember, keep your output short and to the point.</para>
+		<para>Starting with version 3, Nagios will process plugins' multiline
+		output, which should be formatted as:</para>
+		<literallayout>
+		SERVICE STATUS: First line of output | First part of performance data
+		Any number of subsequent lines of output, but note that buffers
+		may have a limited size | Second part of performance data, which
+		may have continuation lines, too
+		</literallayout>
+		<para>Note, however, that the default configs still do not include
+		the output's continuation lines into the notifications sent when
+		Nagios notifies contacts about potential problems.
+		Thus, keep your output short and to the point.</para>
 
 		<para>Output should be in the format:</para>
 		<literallayout>
@@ -133,7 +141,7 @@
 		</section>
 
 		<section><title>Screen Output</title>
-		<para>The plug-in should print the diagnostic and just the
+		<para>The plugin should print the diagnostic and just the
 		usage part of the help message.  A well written plugin would
 		then have --help as a way to get the verbose help.</para>
 
@@ -144,7 +152,7 @@
 		<section><title>Plugin Return Codes</title>
 		<para>The return codes below are based on the POSIX spec of returning
 		a positive value.  Netsaint prior to v0.0.7 supported non-POSIX
-		compliant return code of "-1" for unknown.  Nagios supports POSIX return
+		compliant return code of "-1" for unknown. Nagios supports POSIX return
 		codes by default.</para>
 
 		<para>Note: Some plugins will on occasion print on STDOUT that an error
@@ -269,10 +277,6 @@
 						<entry>@10:20</entry>
 						<entry>&ge; 10 and &le; 20, (inside the range of {10 .. 20})</entry>
 					</row>
-					<row>
-						<entry>10</entry>
-						<entry>&lt; 0 or &gt; 10, (outside the range of {0 .. 10})</entry>
-					</row>
 				</tbody>
 			</tgroup>
 		</table>
@@ -319,10 +323,14 @@
 		</section>
 
 		<section><title>Performance data</title>
-		<para>Performance data is defined by Nagios as "everything after the | of the plugin output" -
-		please refer to Nagios documentation for information on capturing this data to logfiles.
-		However, it is the responsibility of the plugin writer to ensure the 
-		performance data is in a "Nagios plugins" format.
+		<para>Nagios 3 and newer will concatenate the parts following a "|" in a) the first
+		line output by the plugin, and b) in the second to last line, into a string it
+		passes to whatever performance data processing it has configured. (Note that it
+		currently does not insert additional whitespace between both, so the plugin needs
+		to provide some to prevent the last pair of a) and the first of b) getting run
+		together.) Please refer to the Nagios documentation for information on how to
+		configure such processing. However, it is the responsibility of the plugin writer
+		to ensure the performance data is in a "Nagios Plugins" format.
 		This is the expected format:</para>
 
 		<literallayout>
@@ -351,7 +359,8 @@
 		<listitem><para>min and max are not required if UOM=%</para>
 			</listitem>
 		<listitem><para>value, min and max in class [-0-9.]. Must all be the
-			same UOM</para>
+			same UOM. value may be a literal "U" instead, this would indicate that the
+			actual value couldn't be determined</para>
 			</listitem>
 		<listitem><para>warn and crit are in the range format (see 
 			<xref linkend="thresholdformat">). Must be the same UOM</para>
@@ -370,7 +379,7 @@
 			</listitem>
 		</orderedlist>
 
-		<para>It is up to third party programs to convert the Nagios plugins 
+		<para>It is up to third party programs to convert the Monitoring Plugins
 		performance data into graphs.</para>
 		</section>
 
@@ -669,11 +678,6 @@ To run a test, from the top level directory, run "make test". This will run
 all the current tests and report an overall success rate.
 </para>
 
-<para>
-See the <ulink url="http://tinderbox.opsera.com">Nagios Plugins Tinderbox server</ulink>
-for the daily test results.
-</para>
-
 <section><title>Test cases for plugins</title>
 <para>These use perl's Test::More. To do a one time test, run "cd plugins && perl t/check_disk.t".
 </para>
@@ -690,7 +694,7 @@ This runs the test in a summary format.
 
 <para>
 For a good and amusing tutorial on using Test::More, see this 
-<ulink url="http://search.cpan.org/~mschwern/Test-Simple-0.62/lib/Test/Tutorial.pod">
+<ulink url="http://search.cpan.org/dist/Test-Simple/lib/Test/Tutorial.pod">
 link</ulink>
 </para>
 
@@ -711,7 +715,7 @@ properly on non-FreeBSD systems. Install with 'CPPFLAGS="-UHAVE_LIBPTHREAD" ./co
 </para>
 
 <para>
-When you run Nagios Plugins' configure, it will look for the tap library and will automatically
+When you run Monitoring Plugins' configure, it will look for the tap library and will automatically
 setup the tests. Run "make test" to run all the tests.
 </para>
 </section>
@@ -743,9 +747,9 @@ setup the tests. Run "make test" to run all the tests.
 	</section>
 
 	<section><title>Commit Messages</title>
-	<para>If the change is due to a contribution, please quote the contributor's name 
-	and, if applicable, add the SourceForge Tracker number. Don't forget to 
-update the THANKS.in file.</para>
+	<para>If the change is due to a contribution, please quote the contributor's name
+	and, if applicable, add the GitHub Issue Tracker number. Don't forget to
+  update the THANKS.in file.</para>
         <para>If you have a change that is useful for noting in the next release, please
 	update the NEWS file.</para>
 	<para>All commits will be written to a ChangeLog at release time.
@@ -756,7 +760,7 @@ update the THANKS.in file.</para>
 	<para>To make the job easier for translators, please follow these guidelines:</para>
 	<orderedlist>
 	  <listitem><para>
-	    Before creating new strings, check the po/nagios-plugins.pot file to 
+	    Before creating new strings, check the po/monitoring-plugins.pot file to
 	    see if a similar string
 	    already exists
 	  </para></listitem>
@@ -786,15 +790,15 @@ update the THANKS.in file.</para>
 	version you are using. For new features, please supply a diff against
 	the Git "master" branch.</para>
 
-	<para>Patches should be submitted via 
-	<ulink url="http://sourceforge.net/tracker/?group_id=29880&amp;atid=397599">SourceForge's
-	tracker system for Nagiosplug patches</ulink> 
-	and be announced to the nagiosplug-devel mailing list.</para>
+	<para>Patches should be submitted via
+	<ulink url="https://github.com/monitoring-plugins/monitoring-plugins/pulls">GitHub's
+	Pull requests for Monitoring Plugins</ulink>
+	</para>
 
 	<para>Submission of a patch implies that the submmitter acknowledges that they
 	are the author of the code (or have permission from the author to release the code)
-	and agree that the code can be released under the GPL. The copyright for the changes will 
-	then revert to the Nagios Plugin Development Team - this is required so that any copyright 
+	and agree that the code can be released under the GPL. The copyright for the changes will
+	then revert to the Monitoring Plugins Development Team - this is required so that any copyright
 	infringements can be investigated quickly without contacting a huge list of copyright holders.
 	Credit will always be given for any patches through a THANKS file in the distribution.</para>
 	</section>
@@ -802,22 +806,22 @@ update the THANKS.in file.</para>
 
 	<section id="Contributedplugins"><title>Contributed plugins</title>
 	<para>Plugins that have been contributed to the project and 
-	distributed with the Nagios Plugin files are held in the contrib/ directory and are not installed
+	distributed with the Monitoring Plugins files are held in the contrib/ directory and are not installed
 	by default. These plugins are not officially supported by the team. 
 	The current policy is that these plugins should be owned and maintained by the original 
-	contributor, preferably hosted on <ulink url="http://exchange.nagios.org">Nagios Exchange</ulink>.
+	contributor, preferably hosted on <ulink url="http://monitoringexchange.org">Monitoring Exchange</ulink>.
 	</para>
 	<para>If patches or bugs are raised to an contributed plugin, we will start communications with the
 	original contributor, but seek to remove the plugin from our distribution.
 	</para>
-	<para>The aim is to distribute only code that the Nagios Plugin team are responsible for.
+	<para>The aim is to distribute only code that the Monitoring Plugins team are responsible for.
 	</para>
 	</section>
 
 	<section id="Newplugins"><title>New plugins</title>
 	<para>If you would like others to use your plugins, please add it to
 	the official 3rd party plugin repository, 
-	<ulink url="http://exchange.nagios.org">Nagios Exchange</ulink>.
+	<ulink url="http://monitoringexchange.org">Monitoring Exchange</ulink>.
 	</para>
 
 	<para>We are not accepting requests for inclusion of plugins into 
@@ -828,7 +832,7 @@ update the THANKS.in file.</para>
       <orderedlist>
 	<listitem>
 	  <para>Include copyright and license information in all files. Copyright must be solely
-		granted to the Nagios Plugin Development Team</para>
+		granted to the Monitoring Plugins Development Team</para>
 	</listitem>
 	<listitem>
 	  <para>The standard command options are supported (--help, --version,

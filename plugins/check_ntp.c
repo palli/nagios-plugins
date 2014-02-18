@@ -1,10 +1,10 @@
 /*****************************************************************************
 * 
-* Nagios check_ntp plugin
+* Monitoring check_ntp plugin
 * 
 * License: GPL
 * Copyright (c) 2006 Sean Finney <seanius@seanius.net>
-* Copyright (c) 2006-2008 Nagios Plugins Development Team
+* Copyright (c) 2006-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -32,7 +32,7 @@
 
 const char *progname = "check_ntp";
 const char *copyright = "2006-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
@@ -54,7 +54,9 @@ void print_help (void);
 void print_usage (void);
 
 /* number of times to perform each request to get a good average. */
+#ifndef AVG_NUM
 #define AVG_NUM 4
+#endif
 
 /* max size of control message data */
 #define MAX_CM_SIZE 468
@@ -398,7 +400,11 @@ double offset_request(const char *host, int *status){
 			die(STATE_UNKNOWN, "can not create new socket");
 		}
 		if(connect(socklist[i], ai_tmp->ai_addr, ai_tmp->ai_addrlen)){
-			die(STATE_UNKNOWN, "can't create socket connection");
+			/* don't die here, because it is enough if there is one server
+			   answering in time. This also would break for dual ipv4/6 stacked
+			   ntp servers when the client only supports on of them.
+			 */
+			DBG(printf("can't create socket connection on peer %i: %s\n", i, strerror(errno)));
 		} else {
 			ufds[i].fd=socklist[i];
 			ufds[i].events=POLLIN;
@@ -476,7 +482,7 @@ double offset_request(const char *host, int *status){
 	} else {
 		/* finally, calculate the average offset */
 		for(i=0; i<servers[best_index].num_responses;i++){
-			avg_offset+=servers[best_index].offset[j];
+			avg_offset+=servers[best_index].offset[i];
 		}
 		avg_offset/=servers[best_index].num_responses;
 	}
@@ -845,6 +851,7 @@ void print_help(void){
 	printf (UT_HELP_VRSN);
 	printf (UT_EXTRA_OPTS);
 	printf (UT_HOST_PORT, 'p', "123");
+	printf (UT_IPv46);
 	printf (" %s\n", "-w, --warning=THRESHOLD");
 	printf ("    %s\n", _("Offset to result in warning status (seconds)"));
 	printf (" %s\n", "-c, --critical=THRESHOLD");
@@ -853,7 +860,7 @@ void print_help(void){
 	printf ("    %s\n", _("Warning threshold for jitter"));
 	printf (" %s\n", "-k, --jcrit=THRESHOLD");
 	printf ("    %s\n", _("Critical threshold for jitter"));
-	printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+	printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 	printf (UT_VERBOSE);
 
 	printf("\n");
@@ -881,5 +888,5 @@ print_usage(void)
 	printf ("%s\n", _("WARNING: check_ntp is deprecated. Please use check_ntp_peer or"));
 	printf ("%s\n\n", _("check_ntp_time instead."));
 	printf ("%s\n", _("Usage:"));
-	printf(" %s -H <host> [-w <warn>] [-c <crit>] [-j <warn>] [-k <crit>] [-v verbose]\n", progname);
+	printf(" %s -H <host> [-w <warn>] [-c <crit>] [-j <warn>] [-k <crit>] [-4|-6] [-v verbose]\n", progname);
 }

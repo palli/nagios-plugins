@@ -1,10 +1,10 @@
 /*****************************************************************************
 * 
-* Nagios check_nt plugin
+* Monitoring check_nt plugin
 * 
 * License: GPL
 * Copyright (c) 2000-2002 Yves Rubin (rubiyz@yahoo.com)
-* Copyright (c) 2003-2007 Nagios Plugins Development Team
+* Copyright (c) 2003-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -34,7 +34,7 @@
 
 const char *progname = "check_nt";
 const char *copyright = "2000-2007";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
@@ -94,6 +94,7 @@ int main(int argc, char **argv){
 	char *description=NULL,*counter_unit = NULL;
 	char *minval = NULL, *maxval = NULL, *errcvt = NULL;
 	char *fds=NULL, *tds=NULL;
+	char *numstr;
 
 	double total_disk_space=0;
 	double free_disk_space=0;
@@ -265,7 +266,10 @@ int main(int argc, char **argv){
 			xasprintf(&send_buffer,"%s&%u&%s&%s", req_password,(vars_to_check==CHECK_SERVICESTATE)?5:6,
 							 (show_all==TRUE) ? "ShowAll" : "ShowFail",value_list);
 			fetch_data (server_address, server_port, send_buffer);
-			return_code=atoi(strtok(recv_buffer,"&"));
+			numstr = strtok(recv_buffer,"&");
+			if (numstr == NULL)
+				die(STATE_UNKNOWN, _("could not fetch information from server\n"));
+			return_code=atoi(numstr);
 			temp_string=strtok(NULL,"&");
 			output_message = strdup (temp_string);
 		}
@@ -275,8 +279,14 @@ int main(int argc, char **argv){
 
 		xasprintf(&send_buffer,"%s&7", req_password);
 		fetch_data (server_address, server_port, send_buffer);
-		mem_commitLimit=atof(strtok(recv_buffer,"&"));
-		mem_commitByte=atof(strtok(NULL,"&"));
+		numstr = strtok(recv_buffer,"&");
+		if (numstr == NULL)
+			die(STATE_UNKNOWN, _("could not fetch information from server\n"));
+		mem_commitLimit=atof(numstr);
+		numstr = strtok(NULL,"&");
+		if (numstr == NULL)
+			die(STATE_UNKNOWN, _("could not fetch information from server\n"));
+		mem_commitByte=atof(numstr);
 		percent_used_space = (mem_commitByte / mem_commitLimit) * 100;
 		warning_used_space = ((float)warning_value / 100) * mem_commitLimit;
 		critical_used_space = ((float)critical_value / 100) * mem_commitLimit;
@@ -740,7 +750,7 @@ void print_help(void)
 	printf ("  %s\n", _("The purpose of this is to be run from command line to determine what instances"));
 	printf ("  %s\n", _(" are available for monitoring without having to log onto the Windows server"));
 	printf ("  %s\n", _("  to run Perfmon directly."));
-	printf ("  %s\n", _("It can also be used in scripts that automatically create Nagios service"));
+	printf ("  %s\n", _("It can also be used in scripts that automatically create the monitoring service"));
 	printf ("  %s\n", _(" configuration files."));
 	printf ("  %s\n", _("Some examples:"));
 	printf ("  %s\n\n", _("check_nt -H 192.168.1.1 -p 1248 -v INSTANCES -l Process"));

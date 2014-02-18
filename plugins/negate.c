@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios negate plugin
+* Monitoring negate plugin
 * 
 * License: GPL
-* Copyright (c) 2002-2008 Nagios Plugins Development Team
+* Copyright (c) 2002-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -31,9 +31,11 @@
 
 const char *progname = "negate";
 const char *copyright = "2002-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #define DEFAULT_TIMEOUT 11
+
+#include <ctype.h>
 
 #include "common.h"
 #include "utils.h"
@@ -163,27 +165,27 @@ process_arguments (int argc, char **argv)
 				timeout_interval = atoi (optarg);
 			break;
 		case 'T':     /* Result to return on timeouts */
-			if ((timeout_state = translate_state(optarg)) == ERROR)
+			if ((timeout_state = mp_translate_state(optarg)) == ERROR)
 				usage4 (_("Timeout result must be a valid state name (OK, WARNING, CRITICAL, UNKNOWN) or integer (0-3)."));
 			break;
 		case 'o':     /* replacement for OK */
-			if ((state[STATE_OK] = translate_state(optarg)) == ERROR)
+			if ((state[STATE_OK] = mp_translate_state(optarg)) == ERROR)
 				usage4 (_("Ok must be a valid state name (OK, WARNING, CRITICAL, UNKNOWN) or integer (0-3)."));
 			permute = FALSE;
 			break;
 
 		case 'w':     /* replacement for WARNING */
-			if ((state[STATE_WARNING] = translate_state(optarg)) == ERROR)
+			if ((state[STATE_WARNING] = mp_translate_state(optarg)) == ERROR)
 				usage4 (_("Warning must be a valid state name (OK, WARNING, CRITICAL, UNKNOWN) or integer (0-3)."));
 			permute = FALSE;
 			break;
 		case 'c':     /* replacement for CRITICAL */
-			if ((state[STATE_CRITICAL] = translate_state(optarg)) == ERROR)
+			if ((state[STATE_CRITICAL] = mp_translate_state(optarg)) == ERROR)
 				usage4 (_("Critical must be a valid state name (OK, WARNING, CRITICAL, UNKNOWN) or integer (0-3)."));
 			permute = FALSE;
 			break;
 		case 'u':     /* replacement for UNKNOWN */
-			if ((state[STATE_UNKNOWN] = translate_state(optarg)) == ERROR)
+			if ((state[STATE_UNKNOWN] = mp_translate_state(optarg)) == ERROR)
 				usage4 (_("Unknown must be a valid state name (OK, WARNING, CRITICAL, UNKNOWN) or integer (0-3)."));
 			permute = FALSE;
 			break;
@@ -215,24 +217,6 @@ validate_arguments (char **command_line)
 }
 
 
-int
-translate_state (char *state_text)
-{
-	char *temp_ptr;
-	for (temp_ptr = state_text; *temp_ptr; temp_ptr++) {
-		*temp_ptr = toupper(*temp_ptr);
-	}
-	if (!strcmp(state_text,"OK") || !strcmp(state_text,"0"))
-		return STATE_OK;
-	if (!strcmp(state_text,"WARNING") || !strcmp(state_text,"1"))
-		return STATE_WARNING;
-	if (!strcmp(state_text,"CRITICAL") || !strcmp(state_text,"2"))
-		return STATE_CRITICAL;
-	if (!strcmp(state_text,"UNKNOWN") || !strcmp(state_text,"3"))
-		return STATE_UNKNOWN;
-	return ERROR;
-}
-
 void
 print_help (void)
 {
@@ -249,7 +233,7 @@ print_help (void)
 
 	printf (UT_HELP_VRSN);
 
-	printf (UT_TIMEOUT, timeout_interval);
+	printf (UT_PLUG_TIMEOUT, timeout_interval);
 	printf ("    %s\n", _("Keep timeout longer than the plugin timeout to retain CRITICAL status."));
 	printf (" -T, --timeout-result=STATUS\n");
 	printf ("    %s\n", _("Custom result on Negate timeouts; see below for STATUS definition\n"));

@@ -3,9 +3,9 @@
 SUBDIRS = gl tap lib plugins plugins-scripts plugins-root po @PERLMODS_DIR@
 
 EXTRA_DIST = config.rpath \
-	ABOUT-NLS ACKNOWLEDGEMENTS AUTHORS BUGS CODING FAQ LEGAL NEWS \
+	ABOUT-NLS ACKNOWLEDGEMENTS AUTHORS CODING ChangeLog FAQ LEGAL NEWS \
 	NP-VERSION-GEN REQUIREMENTS SUPPORT THANKS \
-	NPTest.pm contrib pkg nagios-plugins.spec \
+	NPTest.pm pkg monitoring-plugins.spec \
 	config_test/Makefile config_test/run_tests config_test/child_test.c \
 	perlmods tools/build_perl_modules \
 	tools/tinderbox_build
@@ -14,6 +14,13 @@ ACLOCAL_AMFLAGS = -I gl/m4 -I m4
 
 localedir = $(datadir)/locale
 DEFS = -DLOCALEDIR=\"$(localedir)\"
+
+#
+# The ChangeLog file is auto-generated from the Git history.  We let it depend
+# on NP-VERSION-GEN, as we bump our version number in that file.
+#
+ChangeLog: NP-VERSION-GEN
+	$(top_srcdir)/tools/generate-change-log > $@
 
 dist-hook:
 	$(MAKE) THANKS
@@ -44,7 +51,7 @@ solpkg:
 	cd $(BUILDDIR) && $(PERL) ../$(PKGSCRIPT) ../$(PACKDIR)
 
 THANKS: THANKS.in
-	@echo "This software is brought to you by the Nagios Plugins Development Team. However," > $@
+	@echo "This software is brought to you by the Monitoring Plugins Development Team. However," > $@
 	@echo "there have been many contributors to this project. Everyone below has helped in " >> $@
 	@echo "raising bug reports, creating patches or contributing new plugins." >> $@
 	@echo "" >> $@

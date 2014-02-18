@@ -3,7 +3,7 @@
 #
 # check_disk.pl <host> <share> <user> <pass> [warn] [critical] [port]
 #
-# Nagios host script to get the disk usage from a SMB share
+# Monitoring host script to get the disk usage from a SMB share
 #
 # Changes and Modifications
 # =========================
@@ -59,6 +59,8 @@ if ($opt_V) {
 if ($opt_h) {print_help(); exit $ERRORS{'OK'};}
 
 my $smbclient = $utils::PATH_TO_SMBCLIENT;
+$smbclient    || usage("check requires smbclient, smbclient not set\n");
+-x $smbclient || usage("check requires smbclient, $smbclient: $!\n");
 
 # Options checking
 
@@ -169,14 +171,14 @@ my $res = undef;
 my $perfdata = "";
 my @lines = undef;
 
-# Just in case of problems, let's not hang Nagios
+# Just in case of problems, let's not hang the monitoring system
 $SIG{'ALRM'} = sub { 
 	print "No Answer from Client\n";
 	exit $ERRORS{"UNKNOWN"};
 };
 alarm($TIMEOUT);
 
-# Execute an "ls" on the share using smbclient program
+# Execute a "du" on the share using smbclient program
 # get the results into $res
 my @cmd = (
 	$smbclient,
@@ -185,7 +187,7 @@ my @cmd = (
 	defined($workgroup) ? ("-W", $workgroup) : (),
 	defined($address) ? ("-I", $address) : (),
 	defined($opt_P) ? ("-p", $opt_P) : (),
-	"-c", "ls"
+	"-c", "du"
 );
 
 print join(" ", @cmd) . "\n" if ($verbose);
@@ -198,7 +200,7 @@ alarm(0);
 @lines = split /\n/, $res;
 
 #Get the last line into $_
-$_ = $lines[$#lines];
+$_ = $lines[$#lines-1];
 #print "$_\n";
 
 #Process the last line to get free space.  
@@ -291,7 +293,7 @@ sub print_help () {
 	print_revision($PROGNAME,'@NP_VERSION@');
 	print "Copyright (c) 2000 Michael Anthon/Karl DeBisschop
 
-Perl Check SMB Disk plugin for Nagios
+Perl Check SMB Disk plugin for monitoring
 
 ";
 	print_usage();

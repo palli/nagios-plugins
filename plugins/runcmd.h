@@ -1,7 +1,7 @@
 /****************************************************************************
 * 
 * License: GPL
-* Copyright (c) 2005 Nagios Plugins Development Team
+* Copyright (c) 2005 Monitoring Plugins Development Team
 * Author: Andreas Ericsson <ae@op5.se>
 * 
 * 
@@ -25,21 +25,11 @@
 #define NAGIOSPLUG_RUNCMD_H
 
 #include "common.h"
-
-/** types **/
-struct output {
-	char *buf;     /* output buffer */
-	size_t buflen; /* output buffer content length */
-	char **line;   /* array of lines (points to buf) */
-	size_t *lens;  /* string lengths */
-	size_t lines;  /* lines of output */
-};
-
-typedef struct output output;
+#include "utils_cmd.h" /* for the "output" type */
 
 /** prototypes **/
 int np_runcmd(const char *, output *, output *, int);
-void popen_timeout_alarm_handler(int)
+void runcmd_timeout_alarm_handler(int)
 	__attribute__((__noreturn__));
 
 /* only multi-threaded plugins need to bother with this */

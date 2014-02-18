@@ -6,36 +6,41 @@
 
 use strict;
 use Test::More;
-use NPTest;
 
-plan skip_all => "check_dig not compiled" unless (-x "check_dig");
 
-plan tests => 12;
+use vars qw($tests $has_ipv6);
+BEGIN {
+    plan skip_all => "check_dig not compiled" unless (-x "check_dig");
+    use NPTest;
+    $has_ipv6 = NPTest::has_ipv6();
+    $tests = $has_ipv6 ? 16 : 14;
+    plan tests => $tests;
+}
 
 my $successOutput = '/DNS OK - [\.0-9]+ seconds? response time/';
 
-my $hostname_valid = getTestParameter( 
+my $hostname_valid = getTestParameter(
 			"NP_HOSTNAME_VALID",
 			"A valid (known to DNS) hostname",
-			"nagios.com"
+			"orwell.monitoring-plugins.org"
 			);
 
 my $hostname_valid_ip = getTestParameter(
 			"NP_HOSTNAME_VALID_IP",
 			"The IP address of the valid hostname $hostname_valid",
-			"66.118.156.50",
+			"130.133.8.40",
 			);
 
 my $hostname_valid_reverse = getTestParameter(
 			"NP_HOSTNAME_VALID_REVERSE",
 			"The hostname of $hostname_valid_ip",
-			"66-118-156-50.static.sagonet.net.",
+			"orwell.monitoring-plugins.org.",
 			);
 
-my $hostname_invalid = getTestParameter( 
-			"NP_HOSTNAME_INVALID", 
+my $hostname_invalid = getTestParameter(
+			"NP_HOSTNAME_INVALID",
 			"An invalid (not known to DNS) hostname",
-			"nosuchhost.altinity.com",
+			"nosuchhost.monitoring-plugins.org",
 			);
 
 my $dns_server       = getTestParameter(
@@ -69,6 +74,10 @@ SKIP: {
 	cmp_ok( $res->return_code, '==', 0, "Found $hostname_valid on $dns_server");
 	like  ( $res->output, $successOutput, "Output OK" );
 
+	$res = NPTest->testCmd("./check_dig -H $dns_server -l $hostname_valid  -t 5 -4");
+	cmp_ok( $res->return_code, '==', 0, "Found $hostname_valid on $dns_server");
+	like  ( $res->output, $successOutput, "Output OK for IPv4" );
+
 	$res = NPTest->testCmd("./check_dig -H $dns_server -l $hostname_valid -a $hostname_valid_ip -t 5");
 	cmp_ok( $res->return_code, '==', 0, "Got expected address");
 
@@ -81,4 +90,9 @@ SKIP: {
 	cmp_ok( $res->return_code, '==', 0, "Got expected fqdn");
 	like  ( $res->output, $successOutput, "Output OK");
 
+    if($has_ipv6) {
+	    $res = NPTest->testCmd("./check_dig -H $dns_server -l $hostname_valid  -t 5 -6");
+	    cmp_ok( $res->return_code, '==', 0, "Found $hostname_valid on $dns_server");
+	    like  ( $res->output, $successOutput, "Output OK for IPv6" );
+    }
 }

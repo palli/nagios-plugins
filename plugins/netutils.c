@@ -1,10 +1,10 @@
 /*****************************************************************************
 * 
-* Nagios plugins network utilities
+* Monitoring Plugins network utilities
 * 
 * License: GPL
 * Copyright (c) 1999 Ethan Galstad (nagios@nagios.org)
-* Copyright (c) 2003-2008 Nagios Plugins Development Team
+* Copyright (c) 2003-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -27,10 +27,11 @@
 * 
 *****************************************************************************/
 
-#define LOCAL_TIMEOUT_ALARM_HANDLER
-
 #include "common.h"
 #include "netutils.h"
+
+unsigned int socket_timeout = DEFAULT_SOCKET_TIMEOUT;
+unsigned int socket_timeout_state = STATE_CRITICAL;
 
 int econn_refuse_state = STATE_CRITICAL;
 int was_refused = FALSE;

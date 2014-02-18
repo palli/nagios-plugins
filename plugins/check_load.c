@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_load plugin
+* Monitoring check_load plugin
 * 
 * License: GPL
-* Copyright (c) 1999-2007 Nagios Plugins Development Team
+* Copyright (c) 1999-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -30,7 +30,7 @@
 
 const char *progname = "check_load";
 const char *copyright = "1999-2007";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "utils.h"
@@ -153,7 +153,16 @@ main (int argc, char **argv)
 		printf (_("Could not open stderr for %s\n"), PATH_TO_UPTIME);
 	}
 	fgets (input_buffer, MAX_INPUT_BUFFER - 1, child_process);
-	sscanf (input_buffer, "%*[^l]load average: %lf, %lf, %lf", &la1, &la5, &la15);
+    if(strstr(input_buffer, "load average:")) {
+	    sscanf (input_buffer, "%*[^l]load average: %lf, %lf, %lf", &la1, &la5, &la15);
+    }
+    else if(strstr(input_buffer, "load averages:")) {
+	    sscanf (input_buffer, "%*[^l]load averages: %lf, %lf, %lf", &la1, &la5, &la15);
+    }
+    else {
+		printf (_("could not parse load from uptime: %s\n"), result, PATH_TO_UPTIME);
+		return STATE_UNKNOWN;
+    }
 
 	result = spclose (child_process);
 	if (result) {

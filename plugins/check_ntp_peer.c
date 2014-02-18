@@ -1,10 +1,10 @@
 /*****************************************************************************
 * 
-* Nagios check_ntp_peer plugin
+* Monitoring check_ntp_peer plugin
 * 
 * License: GPL
 * Copyright (c) 2006 Sean Finney <seanius@seanius.net>
-* Copyright (c) 2006-2008 Nagios Plugins Development Team
+* Copyright (c) 2006-2008 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -37,7 +37,7 @@
 
 const char *progname = "check_ntp_peer";
 const char *copyright = "2006-2008";
-const char *email = "nagiosplug-devel@lists.sourceforge.net";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
@@ -241,15 +241,19 @@ int ntp_request(const char *host, double *offset, int *offset_result, double *ji
 		DBG(printf("sending READSTAT request"));
 		write(conn, &req, SIZEOF_NTPCM(req));
 		DBG(print_ntp_control_message(&req));
-		/* Attempt to read the largest size packet possible */
-		req.count=htons(MAX_CM_SIZE);
-		DBG(printf("recieving READSTAT response"))
-		if(read(conn, &req, SIZEOF_NTPCM(req)) == -1)
-			die(STATE_CRITICAL, "NTP CRITICAL: No response from NTP server\n");
-		DBG(print_ntp_control_message(&req));
-		/* discard obviously invalid packets */
-		if (ntohs(req.count) > MAX_CM_SIZE)
-			die(STATE_CRITICAL, "NTP CRITICAL: Invalid packet received from NTP server\n");
+
+		do {
+			/* Attempt to read the largest size packet possible */
+			req.count=htons(MAX_CM_SIZE);
+			DBG(printf("recieving READSTAT response"))
+			if(read(conn, &req, SIZEOF_NTPCM(req)) == -1)
+				die(STATE_CRITICAL, "NTP CRITICAL: No response from NTP server\n");
+			DBG(print_ntp_control_message(&req));
+			/* discard obviously invalid packets */
+			if (ntohs(req.count) > MAX_CM_SIZE)
+				die(STATE_CRITICAL, "NTP CRITICAL: Invalid packet received from NTP server\n");
+		} while (!(req.op&OP_READSTAT && ntohs(req.seq) == 1));
+
 		if (LI(req.flags) == LI_ALARM) li_alarm = 1;
 		/* Each peer identifier is 4 bytes in the data section, which
 	 	 * we represent as a ntp_assoc_status_pair datatype.
@@ -312,10 +316,12 @@ int ntp_request(const char *host, double *offset, int *offset_result, double *ji
 				write(conn, &req, SIZEOF_NTPCM(req));
 				DBG(print_ntp_control_message(&req));
 
-				req.count = htons(MAX_CM_SIZE);
-				DBG(printf("receiving READVAR response...\n"));
-				read(conn, &req, SIZEOF_NTPCM(req));
-				DBG(print_ntp_control_message(&req));
+				do {
+					req.count = htons(MAX_CM_SIZE);
+					DBG(printf("receiving READVAR response...\n"));
+					read(conn, &req, SIZEOF_NTPCM(req));
+					DBG(print_ntp_control_message(&req));
+				} while (!(req.op&OP_READVAR && ntohs(req.seq) == 2));
 
 				if(!(req.op&REM_ERROR))
 					xasprintf(&data, "%s%s", data, req.data);
@@ -660,6 +666,7 @@ void print_help(void){
 	print_usage();
 	printf (UT_HELP_VRSN);
 	printf (UT_EXTRA_OPTS);
+	printf (UT_IPv46);
 	printf (UT_HOST_PORT, 'p', "123");
 	printf (" %s\n", "-q, --quiet");
 	printf ("    %s\n", _("Returns UNKNOWN instead of CRITICAL or WARNING if server isn't synchronized"));
@@ -679,7 +686,7 @@ void print_help(void){
 	printf ("    %s\n", _("Warning threshold for number of usable time sources (\"truechimers\")"));
 	printf (" %s\n", "-n, --tcrit=THRESHOLD");
 	printf ("    %s\n", _("Critical threshold for number of usable time sources (\"truechimers\")"));
-	printf (UT_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
+	printf (UT_CONN_TIMEOUT, DEFAULT_SOCKET_TIMEOUT);
 	printf (UT_VERBOSE);
 
 	printf("\n");
@@ -716,6 +723,6 @@ void
 print_usage(void)
 {
 	printf ("%s\n", _("Usage:"));
-	printf(" %s -H <host> [-w <warn>] [-c <crit>] [-W <warn>] [-C <crit>]\n", progname);
+	printf(" %s -H <host> [-4|-6] [-w <warn>] [-c <crit>] [-W <warn>] [-C <crit>]\n", progname);
 	printf("       [-j <warn>] [-k <crit>] [-v verbose]\n");
 }
